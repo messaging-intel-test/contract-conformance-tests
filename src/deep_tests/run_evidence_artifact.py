@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -8,6 +9,7 @@ from typing import Iterable, Mapping
 
 from .run_evidence import (
     Counts,
+    EVIDENCE_SCHEMA,
     EvidenceValidationError,
     FailureClass,
     ProviderResult,
@@ -15,7 +17,6 @@ from .run_evidence import (
     QueueWriteStatus,
     RunEvidence,
     RunStatus,
-    canonical_json,
     scan_for_sensitive_material,
 )
 
@@ -34,7 +35,8 @@ class WindowState(str, Enum):
 
 
 def _artifact_digest(body: Mapping[str, object]) -> str:
-    return f"sha256:{hashlib.sha256(canonical_json(body).encode('utf-8')).hexdigest()}"
+    encoded = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 def _provider_retry_disposition(provider: ProviderResult) -> str:
@@ -46,7 +48,7 @@ def _provider_retry_disposition(provider: ProviderResult) -> str:
 
 
 def _provider_payload(provider: ProviderResult) -> dict[str, object]:
-    payload = provider.to_dict()
+    payload = provider.payload()
     payload["retry_disposition"] = _provider_retry_disposition(provider)
     return payload
 
@@ -62,6 +64,7 @@ def _run_evidence_from_payload(payload: Mapping[str, object]) -> RunEvidence:
         "config_digest",
         "counts",
         "ended_at",
+        "schema",
         "execution_mode",
         "fixture_digest",
         "job",
@@ -77,6 +80,8 @@ def _run_evidence_from_payload(payload: Mapping[str, object]) -> RunEvidence:
     }
     if set(payload) != expected:
         raise EvidenceValidationError("run evidence fields do not match the artifact contract")
+    if payload["schema"] != EVIDENCE_SCHEMA:
+        raise EvidenceValidationError("run evidence schema does not match the artifact contract")
     raw_counts = payload["counts"]
     raw_providers = payload["providers"]
     if not isinstance(raw_counts, Mapping) or not isinstance(raw_providers, list):
@@ -89,7 +94,7 @@ def _run_evidence_from_payload(payload: Mapping[str, object]) -> RunEvidence:
         "thread_checked",
         "reviewed",
         "accepted",
-        "queued",
+        "rejected",
     }
     if set(raw_counts) != count_fields:
         raise EvidenceValidationError("count fields do not match the artifact contract")
@@ -149,16 +154,20 @@ class RunEvidenceArtifact:
             raise EvidenceValidationError("unsupported run-evidence artifact schema")
         if not _SHA_40.fullmatch(self.suite_sha):
             raise EvidenceValidationError("suite_sha must be a lowercase 40-character SHA")
-        self.evidence.validate(observed_at=observed_at)
-        scan_for_sensitive_material(self.body())
+        observed = self.evidence.ended_at if observed_at is None else observed_at
+        self.evidence.validate(observed_at=observed)
+        scan_for_sensitive_material(self._body_unchecked())
 
-    def body(self) -> dict[str, object]:
-        self.validate()
+    def _body_unchecked(self) -> dict[str, object]:
         return {
             "run_evidence": _run_payload(self.evidence),
             "schema_version": self.schema_version,
             "suite_sha": self.suite_sha,
         }
+
+    def body(self) -> dict[str, object]:
+        self.validate()
+        return self._body_unchecked()
 
     def envelope(self) -> dict[str, object]:
         body = self.body()

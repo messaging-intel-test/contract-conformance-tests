@@ -49,13 +49,13 @@ def make_evidence(
             thread_checked=6,
             reviewed=6,
             accepted=5,
-            queued=5,
+            rejected=1,
         ),
         providers=(
             ProviderResult("fixture-social", ProviderStatus.SUCCEEDED, 4),
             ProviderResult("fixture-web", ProviderStatus.SUCCEEDED, 4),
         ),
-        queue_write_status=QueueWriteStatus.SUCCEEDED,
+        queue_write_status=QueueWriteStatus.SYNTHETIC,
         outbound_enabled=False,
     )
 
