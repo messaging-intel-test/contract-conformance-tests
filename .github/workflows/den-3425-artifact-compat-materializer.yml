@@ -1,0 +1,80 @@
+name: Materialize DEN-3425 artifact compatibility repair
+
+on:
+  push:
+    branches:
+      - alexanderdmills/den-3425-run-evidence
+    paths:
+      - '.github/den-3425-artifact-compat.patch'
+      - '.github/workflows/den-3425-artifact-compat-materializer.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: den-3425-artifact-compat-materializer
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: >-
+      github.repository == 'messaging-intel-test/contract-conformance-tests' &&
+      github.ref == 'refs/heads/alexanderdmills/den-3425-run-evidence'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact carrier commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: true
+
+      - name: Verify and apply reviewed compatibility patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REPOSITORY" = messaging-intel-test/contract-conformance-tests
+          test "$GITHUB_REF_NAME" = alexanderdmills/den-3425-run-evidence
+          test "$(git hash-object .github/den-3425-artifact-compat.patch)" = e39d47117793734cc662644e4575dbee1bfa8b73
+          git apply --check .github/den-3425-artifact-compat.patch
+          git apply .github/den-3425-artifact-compat.patch
+          git diff --check
+
+      - name: Compile and verify repository contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q src tests scripts
+          python scripts/verify_repository.py
+
+      - name: Run complete deterministic deep suite
+        shell: bash
+        env:
+          PYTHONPATH: src
+          DEEP_TEST_SEEDS: 0-49
+        run: python -m unittest discover -s tests -v
+
+      - name: Publish validated target bytes as non-workflow staging files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .repair-staging/src/deep_tests .repair-staging/tests
+          cp src/deep_tests/run_evidence_artifact.py .repair-staging/src/deep_tests/run_evidence_artifact.py
+          cp tests/test_run_evidence_artifact.py .repair-staging/tests/test_run_evidence_artifact.py
+          git checkout -- \
+            src/deep_tests/run_evidence_artifact.py \
+            tests/test_run_evidence_artifact.py
+          git status --porcelain=v1 --untracked-files=all | cut -c4- | LC_ALL=C sort > "$RUNNER_TEMP/actual-changed"
+          cat > "$RUNNER_TEMP/expected-changed" <<'EOF'
+          .repair-staging/src/deep_tests/run_evidence_artifact.py
+          .repair-staging/tests/test_run_evidence_artifact.py
+          EOF
+          diff -u "$RUNNER_TEMP/expected-changed" "$RUNNER_TEMP/actual-changed"
+          git add .repair-staging
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(DEN-3425): stage validated artifact compatibility bytes'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
