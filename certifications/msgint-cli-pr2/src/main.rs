@@ -25,7 +25,10 @@ fn parse(argv: &[&str]) -> Outcome {
         .expect("exact product flags policy must audit cleanly");
     let parsed = parser
         .parse_structured(
-            &argv.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>(),
+            &argv
+                .iter()
+                .map(|value| (*value).to_owned())
+                .collect::<Vec<_>>(),
             Some(policy),
         )
         .expect("flags parser execution");
