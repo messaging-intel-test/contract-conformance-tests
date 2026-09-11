@@ -1,0 +1,71 @@
+#![forbid(unsafe_code)]
+
+use std::path::{Path, PathBuf};
+
+use flags2env::BundledFlags2Env;
+
+fn policy_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(".cli-flags.toml")
+}
+
+fn parse(argv: &[&str]) -> flags2env::StructuredParseResult {
+    let policy = policy_path();
+    let policy = policy.to_str().expect("UTF-8 policy path");
+    let parser = BundledFlags2Env::new();
+    parser
+        .audit_config(Some(policy))
+        .expect("exact product flags policy must audit cleanly");
+    parser
+        .parse_structured(
+            &argv.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>(),
+            Some(policy),
+        )
+        .expect("flags parser execution")
+}
+
+fn assert_command(command: &str) {
+    let parsed = parse(&["msgint", command]);
+    assert!(parsed.errors.is_empty(), "{command} emitted parse errors");
+    assert!(
+        parsed.unknown_options.is_empty(),
+        "{command} emitted unknown options"
+    );
+    assert_eq!(parsed.command, command);
+    assert!(parsed.flags.is_empty(), "command-only CLI exposed flags");
+}
+
+fn assert_rejected(argument: &str) {
+    let parsed = parse(&["msgint", "identity", argument]);
+    assert!(
+        !parsed.unknown_options.is_empty() || !parsed.errors.is_empty(),
+        "credential-shaped or unknown public option was accepted"
+    );
+}
+
+fn main() {
+    assert_command("check-config");
+    assert_command("identity");
+
+    for argument in [
+        "--token=synthetic",
+        "--secret=synthetic",
+        "--password=synthetic",
+        "--shared-auth-introspect-secret=synthetic",
+        "--user-token=synthetic",
+        "--unexpected=synthetic",
+    ] {
+        assert_rejected(argument);
+    }
+
+    let policy = std::fs::read_to_string(policy_path()).expect("read policy");
+    let lowercase = policy.to_ascii_lowercase();
+    assert!(!lowercase.contains("[flags."));
+    for sensitive in ["token", "secret", "password", "credential"] {
+        assert!(
+            !lowercase.contains(sensitive),
+            "sensitive terminology leaked into public flags authority"
+        );
+    }
+
+    println!("msgint-cli PR #2 public flags authority certified");
+}
