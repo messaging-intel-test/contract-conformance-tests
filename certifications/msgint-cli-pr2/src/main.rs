@@ -70,7 +70,10 @@ fn assert_option_rejected(argument: &str) {
 
 fn assert_operand_rejected(argument: &str) {
     let outcome = parse(&["msgint", "identity", argument]);
-    assert!(outcome.extras != 0, "unexpected command operand was accepted");
+    assert!(
+        outcome.extras != 0,
+        "unexpected command operand was accepted"
+    );
 }
 
 fn main() {
