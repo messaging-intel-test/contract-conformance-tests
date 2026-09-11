@@ -1,0 +1,15 @@
+[package]
+name = "msgint-cli-flags-certification"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+flags2env = { git = "https://github.com/flags-2-env/flags-2-env.git", rev = "377bff1a4e7424eb98377997a232ddc0fc700f59" }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "deny"
+pedantic = "deny"
