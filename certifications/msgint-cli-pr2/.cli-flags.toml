@@ -1,0 +1,11 @@
+[help]
+url = "https://github.com/messaging-intel/msgint-cli"
+
+[parse]
+allow_unknown = false
+
+[commands.check-config]
+help = "Validate fail-closed Shared Auth configuration."
+
+[commands.identity]
+help = "Verify the current user identity through Shared Auth."
