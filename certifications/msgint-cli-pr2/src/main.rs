@@ -9,7 +9,7 @@ struct Outcome {
     command: String,
     unknown_options: usize,
     errors: usize,
-    flags: usize,
+    flag_keys: Vec<String>,
 }
 
 fn policy_path() -> PathBuf {
@@ -32,11 +32,13 @@ fn parse(argv: &[&str]) -> Outcome {
             Some(policy),
         )
         .expect("flags parser execution");
+    let mut flag_keys = parsed.flags.into_keys().collect::<Vec<_>>();
+    flag_keys.sort();
     Outcome {
         command: parsed.command,
         unknown_options: parsed.unknown_options.len(),
         errors: parsed.errors.len(),
-        flags: parsed.flags.len(),
+        flag_keys,
     }
 }
 
@@ -48,7 +50,11 @@ fn assert_command(command: &str) {
         "{command} emitted unknown options"
     );
     assert_eq!(outcome.command, command);
-    assert_eq!(outcome.flags, 0, "command-only CLI exposed flags");
+    assert!(
+        outcome.flag_keys.is_empty(),
+        "command-only CLI exposed structured flags: {:?}",
+        outcome.flag_keys
+    );
 }
 
 fn assert_rejected(argument: &str) {
