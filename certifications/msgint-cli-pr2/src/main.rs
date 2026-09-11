@@ -9,6 +9,7 @@ struct Outcome {
     command: String,
     unknown_options: usize,
     errors: usize,
+    extras: usize,
     flags: Vec<(String, String)>,
 }
 
@@ -38,6 +39,7 @@ fn parse(argv: &[&str]) -> Outcome {
         command: parsed.command,
         unknown_options: parsed.unknown_options.len(),
         errors: parsed.errors.len(),
+        extras: parsed.extras.len(),
         flags,
     }
 }
@@ -49,6 +51,7 @@ fn assert_command(command: &str) {
         outcome.unknown_options, 0,
         "{command} emitted unknown options"
     );
+    assert_eq!(outcome.extras, 0, "{command} emitted extra operands");
     assert_eq!(outcome.command, command);
     assert_eq!(
         outcome.flags,
@@ -57,7 +60,7 @@ fn assert_command(command: &str) {
     );
 }
 
-fn assert_rejected(argument: &str) {
+fn assert_option_rejected(argument: &str) {
     let outcome = parse(&["msgint", "identity", argument]);
     assert!(
         outcome.unknown_options != 0 || outcome.errors != 0,
@@ -65,9 +68,15 @@ fn assert_rejected(argument: &str) {
     );
 }
 
+fn assert_operand_rejected(argument: &str) {
+    let outcome = parse(&["msgint", "identity", argument]);
+    assert!(outcome.extras != 0, "unexpected command operand was accepted");
+}
+
 fn main() {
     assert_command("check-config");
     assert_command("identity");
+    assert_operand_rejected("unexpected-operand");
 
     for argument in [
         "--token=synthetic",
@@ -77,7 +86,7 @@ fn main() {
         "--user-token=synthetic",
         "--unexpected=synthetic",
     ] {
-        assert_rejected(argument);
+        assert_option_rejected(argument);
     }
 
     let policy = std::fs::read_to_string(policy_path()).expect("read policy");
