@@ -1,0 +1,46 @@
+name: Certify msgint CLI PR2 flags
+
+on:
+  pull_request:
+    paths:
+      - 'certifications/msgint-cli-pr2/**'
+      - '.github/workflows/msgint-cli-pr2-flags.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'certifications/msgint-cli-pr2/**'
+      - '.github/workflows/msgint-cli-pr2-flags.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          toolchain: '1.90.0'
+          components: rustfmt, clippy
+
+      - name: Verify committed certification lock
+        working-directory: certifications/msgint-cli-pr2
+        run: cargo metadata --locked --format-version 1 >/dev/null
+
+      - name: Format certification harness
+        working-directory: certifications/msgint-cli-pr2
+        run: cargo fmt --all -- --check
+
+      - name: Execute exact public flags canaries
+        working-directory: certifications/msgint-cli-pr2
+        run: cargo run --locked
+
+      - name: Clippy certification harness
+        working-directory: certifications/msgint-cli-pr2
+        run: cargo clippy --all-targets --locked -- -D warnings
