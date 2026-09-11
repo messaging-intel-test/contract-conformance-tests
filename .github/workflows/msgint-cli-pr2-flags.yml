@@ -29,14 +29,18 @@ jobs:
           toolchain: '1.90.0'
           components: rustfmt, clippy
 
+      - name: Verify committed certification lock
+        working-directory: certifications/msgint-cli-pr2
+        run: cargo metadata --locked --format-version 1 >/dev/null
+
       - name: Format certification harness
         working-directory: certifications/msgint-cli-pr2
         run: cargo fmt --all -- --check
 
       - name: Execute exact public flags canaries
         working-directory: certifications/msgint-cli-pr2
-        run: cargo run
+        run: cargo run --locked
 
       - name: Clippy certification harness
         working-directory: certifications/msgint-cli-pr2
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --locked -- -D warnings
