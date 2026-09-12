@@ -1,0 +1,186 @@
+name: Messaging Intel TJSV negative-report certificate
+
+on:
+  pull_request:
+    paths:
+      - "contracts/message-signal/**"
+      - ".github/workflows/tjsv-negative-report-certificate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "contracts/message-signal/**"
+      - ".github/workflows/tjsv-negative-report-certificate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-negative-reports:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact test head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          show-progress: false
+          fetch-depth: 1
+
+      - name: Verify exact revision and bind authored bytes
+        id: authored
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'typespec=%s\n' "$(sha256sum contracts/message-signal/main.tsp | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          printf 'schema=%s\n' "$(sha256sum contracts/message-signal/authored.schema.json | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Prove positive peer-authority admission
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: contracts/message-signal/main.tsp
+          schema: contracts/message-signal/authored.schema.json
+          instances: contracts/message-signal/instances
+          report: .typespec-json-schema-validator/positive/report.json
+          sarif: .typespec-json-schema-validator/positive/report.sarif
+          contract_ir: .typespec-json-schema-validator/positive/contract-ir.json
+          output_dir: .typespec-json-schema-validator/positive/generated
+          max_probes: "64"
+
+      - name: Assert independent authorities and comparison-only Schema B
+        shell: bash
+        run: |
+          set -euo pipefail
+          report=.typespec-json-schema-validator/positive/report.json
+          generated=.typespec-json-schema-validator/positive/generated/typespec.generated.schema.json
+          test -s "$generated"
+          jq -e '
+            .schema == "ores.typespec-json-schema-validator.report/v1" and
+            .status == "passed" and
+            .zeroUnexplainedFindings == true and
+            .authorities.precedence == "none" and
+            .authorities.typespec.authority == "independently-authored" and
+            .authorities.jsonSchema.authority == "independently-authored" and
+            .authorities.typespec.generatedJsonSchemaRole == "comparison-evidence-only" and
+            .coverage.typespecGeneratedJsonSchemaComparison == true and
+            .coverage.differentialInstanceValidation == true and
+            (.differential.summary.probesEvaluated // 0) > 0 and
+            (.differential.summary.divergences // 0) == 0
+          ' "$report"
+          jq -e '."$schema" == "https://json-schema.org/draft/2020-12/schema"' "$generated"
+
+      - name: Prepare TypeSpec-only drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          case_dir="$RUNNER_TEMP/message-typespec-drift"
+          rm -rf "$case_dir"
+          mkdir -p "$case_dir/generated"
+          sed 's/message_id: string;/message_id: boolean;/' contracts/message-signal/main.tsp > "$case_dir/main.tsp"
+          grep -q 'message_id: boolean;' "$case_dir/main.tsp"
+
+      - name: TypeSpec-only drift must fail closed
+        id: typespec_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: ${{ runner.temp }}/message-typespec-drift/main.tsp
+          schema: contracts/message-signal/authored.schema.json
+          instances: contracts/message-signal/instances
+          report: ${{ runner.temp }}/message-typespec-drift/report.json
+          contract_ir: ${{ runner.temp }}/message-typespec-drift/contract-ir.json
+          output_dir: ${{ runner.temp }}/message-typespec-drift/generated
+          max_probes: "64"
+
+      - name: Assert TypeSpec drift produced semantic parity evidence
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.typespec_drift.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          report="$RUNNER_TEMP/message-typespec-drift/report.json"
+          test -s "$report"
+          jq -e '
+            .schema == "ores.typespec-json-schema-validator.report/v1" and
+            .status == "stopped_for_evaluation" and
+            .authorities.precedence == "none" and
+            .authorities.typespec.authority == "independently-authored" and
+            .authorities.jsonSchema.authority == "independently-authored" and
+            .coverage.typespecGeneratedJsonSchemaComparison == true and
+            any(.findings[]; .ruleId == "generated-authored-semantic-mismatch")
+          ' "$report"
+          mkdir -p .typespec-json-schema-validator/negative
+          cp "$report" .typespec-json-schema-validator/negative/typespec-drift.report.json
+
+      - name: Prepare JSON-Schema-only drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          case_dir="$RUNNER_TEMP/message-json-schema-drift"
+          rm -rf "$case_dir"
+          mkdir -p "$case_dir/generated"
+          cp contracts/message-signal/authored.schema.json "$case_dir/authored.schema.json"
+          jq '."$defs".MessageSignalV1.properties.message_id.type = "boolean"' \
+            "$case_dir/authored.schema.json" > "$case_dir/authored.schema.json.tmp"
+          mv "$case_dir/authored.schema.json.tmp" "$case_dir/authored.schema.json"
+          jq -e '."$defs".MessageSignalV1.properties.message_id.type == "boolean"' "$case_dir/authored.schema.json"
+
+      - name: JSON-Schema-only drift must fail closed
+        id: json_schema_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: contracts/message-signal/main.tsp
+          schema: ${{ runner.temp }}/message-json-schema-drift/authored.schema.json
+          instances: contracts/message-signal/instances
+          report: ${{ runner.temp }}/message-json-schema-drift/report.json
+          contract_ir: ${{ runner.temp }}/message-json-schema-drift/contract-ir.json
+          output_dir: ${{ runner.temp }}/message-json-schema-drift/generated
+          max_probes: "64"
+
+      - name: Assert JSON Schema drift produced semantic parity evidence
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.json_schema_drift.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          report="$RUNNER_TEMP/message-json-schema-drift/report.json"
+          test -s "$report"
+          jq -e '
+            .schema == "ores.typespec-json-schema-validator.report/v1" and
+            .status == "stopped_for_evaluation" and
+            .authorities.precedence == "none" and
+            .authorities.typespec.authority == "independently-authored" and
+            .authorities.jsonSchema.authority == "independently-authored" and
+            .coverage.typespecGeneratedJsonSchemaComparison == true and
+            any(.findings[]; .ruleId == "generated-authored-semantic-mismatch")
+          ' "$report"
+          cp "$report" .typespec-json-schema-validator/negative/json-schema-drift.report.json
+
+      - name: Prove authored sources remained immutable
+        shell: bash
+        env:
+          EXPECTED_TYPESPEC_SHA256: ${{ steps.authored.outputs.typespec }}
+          EXPECTED_SCHEMA_SHA256: ${{ steps.authored.outputs.schema }}
+        run: |
+          set -euo pipefail
+          test "$(sha256sum contracts/message-signal/main.tsp | awk '{print $1}')" = "$EXPECTED_TYPESPEC_SHA256"
+          test "$(sha256sum contracts/message-signal/authored.schema.json | awk '{print $1}')" = "$EXPECTED_SCHEMA_SHA256"
+          git diff --exit-code -- contracts/message-signal
+
+      - name: Retain deterministic parity evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: message-negative-report-certificate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .typespec-json-schema-validator/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
