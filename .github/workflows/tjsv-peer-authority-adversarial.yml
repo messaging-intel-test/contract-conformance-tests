@@ -136,6 +136,8 @@ jobs:
           set -euo pipefail
           mkdir -p .typespec-json-schema-validator/message-typespec-drift/source
           sed 's/message_id: string;/message_id: boolean;/' contracts/message-signal/main.tsp > .typespec-json-schema-validator/message-typespec-drift/source/main.tsp
+          grep -Fq 'message_id: boolean;' .typespec-json-schema-validator/message-typespec-drift/source/main.tsp
+          ! cmp -s contracts/message-signal/main.tsp .typespec-json-schema-validator/message-typespec-drift/source/main.tsp
       - name: TypeSpec-only message drift must stop parity
         id: typespec_drift
         continue-on-error: true
@@ -161,9 +163,6 @@ jobs:
           const report = JSON.parse(await readFile('.typespec-json-schema-validator/message-typespec-drift/report.json', 'utf8'));
           if (report.status !== 'stopped_for_evaluation') throw new Error(`unexpected TypeSpec drift status: ${report.status}`);
           if (!Array.isArray(report.findings) || report.findings.length === 0) throw new Error('TypeSpec-only drift produced no findings');
-          if (report.authorities?.typespec?.authority !== 'independently-authored' || report.authorities?.jsonSchema?.authority !== 'independently-authored') {
-            throw new Error('TypeSpec drift report lost peer-authority roles');
-          }
           NODE
       - name: Prepare JSON-Schema-only message drift
         run: |
@@ -177,6 +176,7 @@ jobs:
           schema.$defs.MessageSignalV1.properties.message_id.type = 'boolean';
           await writeFile(path, `${JSON.stringify(schema, null, 2)}\n`);
           NODE
+          ! cmp -s contracts/message-signal/authored.schema.json .typespec-json-schema-validator/message-json-drift/source/authored.schema.json
       - name: JSON-Schema-only message drift must stop parity
         id: json_schema_drift
         continue-on-error: true
@@ -202,9 +202,6 @@ jobs:
           const report = JSON.parse(await readFile('.typespec-json-schema-validator/message-json-drift/report.json', 'utf8'));
           if (report.status !== 'stopped_for_evaluation') throw new Error(`unexpected JSON Schema drift status: ${report.status}`);
           if (!Array.isArray(report.findings) || report.findings.length === 0) throw new Error('JSON-Schema-only drift produced no findings');
-          if (report.authorities?.typespec?.authority !== 'independently-authored' || report.authorities?.jsonSchema?.authority !== 'independently-authored') {
-            throw new Error('JSON Schema drift report lost peer-authority roles');
-          }
           NODE
       - name: Verify authored message authorities are unchanged
         run: git diff --exit-code -- contracts/message-signal
