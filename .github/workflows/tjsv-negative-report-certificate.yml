@@ -73,27 +73,28 @@ jobs:
           ' "$report"
           jq -e '."$schema" == "https://json-schema.org/draft/2020-12/schema"' "$generated"
 
-      - name: Prepare TypeSpec-only drift
+      - name: Prepare TypeSpec-only semantic drift
         shell: bash
         run: |
           set -euo pipefail
-          case_dir="$RUNNER_TEMP/message-typespec-drift"
+          case_dir="$GITHUB_WORKSPACE/.typespec-json-schema-validator/negative/typespec-drift-work"
           rm -rf "$case_dir"
           mkdir -p "$case_dir/generated"
-          sed 's/message_id: string;/message_id: boolean;/' contracts/message-signal/main.tsp > "$case_dir/main.tsp"
-          grep -q 'message_id: boolean;' "$case_dir/main.tsp"
+          sed 's/contains_pii: boolean;/contains_pii: string;/' contracts/message-signal/main.tsp > "$case_dir/main.tsp"
+          grep -q 'contains_pii: string;' "$case_dir/main.tsp"
+          grep -q 'contains_pii: boolean;' contracts/message-signal/main.tsp
 
-      - name: TypeSpec-only drift must fail closed
+      - name: TypeSpec-only drift must fail closed after Schema-B generation
         id: typespec_drift
         continue-on-error: true
         uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
         with:
-          typespec: ${{ runner.temp }}/message-typespec-drift/main.tsp
+          typespec: .typespec-json-schema-validator/negative/typespec-drift-work/main.tsp
           schema: contracts/message-signal/authored.schema.json
           instances: contracts/message-signal/instances
-          report: ${{ runner.temp }}/message-typespec-drift/report.json
-          contract_ir: ${{ runner.temp }}/message-typespec-drift/contract-ir.json
-          output_dir: ${{ runner.temp }}/message-typespec-drift/generated
+          report: .typespec-json-schema-validator/negative/typespec-drift-work/report.json
+          contract_ir: .typespec-json-schema-validator/negative/typespec-drift-work/contract-ir.json
+          output_dir: .typespec-json-schema-validator/negative/typespec-drift-work/generated
           max_probes: "64"
 
       - name: Assert TypeSpec drift produced semantic parity evidence
@@ -103,8 +104,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$OUTCOME" = failure
-          report="$RUNNER_TEMP/message-typespec-drift/report.json"
+          report=.typespec-json-schema-validator/negative/typespec-drift-work/report.json
+          generated=.typespec-json-schema-validator/negative/typespec-drift-work/generated/typespec.generated.schema.json
           test -s "$report"
+          test -s "$generated"
           jq -e '
             .schema == "ores.typespec-json-schema-validator.report/v1" and
             .status == "stopped_for_evaluation" and
@@ -114,7 +117,6 @@ jobs:
             .coverage.typespecGeneratedJsonSchemaComparison == true and
             any(.findings[]; .ruleId == "generated-authored-semantic-mismatch")
           ' "$report"
-          mkdir -p .typespec-json-schema-validator/negative
           cp "$report" .typespec-json-schema-validator/negative/typespec-drift.report.json
 
       - name: Prepare JSON-Schema-only drift
@@ -151,7 +153,9 @@ jobs:
           set -euo pipefail
           test "$OUTCOME" = failure
           report="$RUNNER_TEMP/message-json-schema-drift/report.json"
+          generated="$RUNNER_TEMP/message-json-schema-drift/generated/typespec.generated.schema.json"
           test -s "$report"
+          test -s "$generated"
           jq -e '
             .schema == "ores.typespec-json-schema-validator.report/v1" and
             .status == "stopped_for_evaluation" and
