@@ -1,0 +1,115 @@
+name: Messaging Intel TJSV peer-authority adversarial admission
+
+on:
+  pull_request:
+    paths:
+      - "contracts/message-signal/**"
+      - ".github/workflows/tjsv-peer-authority-adversarial.yml"
+  push:
+    branches: [main]
+    paths:
+      - "contracts/message-signal/**"
+      - ".github/workflows/tjsv-peer-authority-adversarial.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-peer-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact candidate
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Set up tested Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.16.0
+      - name: Transpile TypeSpec and compare independent message JSON Schema
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: contracts/message-signal/main.tsp
+          schema: contracts/message-signal/authored.schema.json
+          instances: contracts/message-signal/instances
+          report: .typespec-json-schema-validator/message-pass/report.json
+          sarif: .typespec-json-schema-validator/message-pass/report.sarif
+          contract_ir: .typespec-json-schema-validator/message-pass/contract-ir.json
+          output_dir: .typespec-json-schema-validator/message-pass/generated
+          max_probes: "64"
+      - name: Verify current evidence and nineteen refusal regressions
+        uses: ORESoftware/typespec-json-schema-validator/actions/test-consumer-admission@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          contract_ir: .typespec-json-schema-validator/message-pass/contract-ir.json
+          report: .typespec-json-schema-validator/message-pass/report.json
+          typespec: contracts/message-signal/main.tsp
+          schema: contracts/message-signal/authored.schema.json
+          generated_schema: .typespec-json-schema-validator/message-pass/generated/typespec.generated.schema.json
+          expected_declarations: '["MessagingIntelSignal.MessageSignalV1"]'
+          verification: .typespec-json-schema-validator/message-pass/verification.json
+      - name: Prepare TypeSpec-only message drift
+        run: |
+          set -euo pipefail
+          mkdir -p .typespec-json-schema-validator/message-typespec-drift/source
+          sed 's/message_id: string;/message_id: boolean;/' contracts/message-signal/main.tsp > .typespec-json-schema-validator/message-typespec-drift/source/main.tsp
+      - name: TypeSpec-only message drift must stop parity
+        id: typespec_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: .typespec-json-schema-validator/message-typespec-drift/source/main.tsp
+          schema: contracts/message-signal/authored.schema.json
+          report: .typespec-json-schema-validator/message-typespec-drift/report.json
+          contract_ir: .typespec-json-schema-validator/message-typespec-drift/contract-ir.json
+          output_dir: .typespec-json-schema-validator/message-typespec-drift/generated
+          max_probes: "64"
+      - name: Assert TypeSpec-only drift was rejected
+        env:
+          OUTCOME: ${{ steps.typespec_drift.outcome }}
+        run: test "$OUTCOME" = failure
+      - name: Prepare JSON-Schema-only message drift
+        run: |
+          set -euo pipefail
+          mkdir -p .typespec-json-schema-validator/message-json-drift/source
+          cp contracts/message-signal/authored.schema.json .typespec-json-schema-validator/message-json-drift/source/authored.schema.json
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const path = '.typespec-json-schema-validator/message-json-drift/source/authored.schema.json';
+          const schema = JSON.parse(await readFile(path, 'utf8'));
+          schema.$defs.MessageSignalV1.properties.message_id.type = 'boolean';
+          await writeFile(path, `${JSON.stringify(schema, null, 2)}\n`);
+          NODE
+      - name: JSON-Schema-only message drift must stop parity
+        id: json_schema_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: contracts/message-signal/main.tsp
+          schema: .typespec-json-schema-validator/message-json-drift/source/authored.schema.json
+          report: .typespec-json-schema-validator/message-json-drift/report.json
+          contract_ir: .typespec-json-schema-validator/message-json-drift/contract-ir.json
+          output_dir: .typespec-json-schema-validator/message-json-drift/generated
+          max_probes: "64"
+      - name: Assert JSON-Schema-only drift was rejected
+        env:
+          OUTCOME: ${{ steps.json_schema_drift.outcome }}
+        run: test "$OUTCOME" = failure
+      - name: Verify authored message authorities are unchanged
+        run: git diff --exit-code -- contracts/message-signal
+      - name: Retain diagnostic evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: message-peer-authority-adversarial-${{ github.run_id }}
+          path: .typespec-json-schema-validator/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
