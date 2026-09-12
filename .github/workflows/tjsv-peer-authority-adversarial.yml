@@ -64,9 +64,11 @@ jobs:
           const reportPath = '.typespec-json-schema-validator/message-pass/report.json';
           const authoredPath = 'contracts/message-signal/authored.schema.json';
           const generatedPath = '.typespec-json-schema-validator/message-pass/generated/typespec.generated.schema.json';
-          const [ir, report, authoredReal, generatedReal] = await Promise.all([
+          const [ir, report, authored, generated, authoredReal, generatedReal] = await Promise.all([
             readFile(irPath, 'utf8').then(JSON.parse),
             readFile(reportPath, 'utf8').then(JSON.parse),
+            readFile(authoredPath, 'utf8').then(JSON.parse),
+            readFile(generatedPath, 'utf8').then(JSON.parse),
             realpath(authoredPath),
             realpath(generatedPath),
           ]);
@@ -77,68 +79,107 @@ jobs:
             precedence: 'none',
           };
           for (const [key, value] of Object.entries(expected)) {
-            if (ir.authorities?.[key] !== value) {
-              throw new Error(`unexpected Contract IR authority ${key}: ${JSON.stringify(ir.authorities?.[key])}`);
-            }
+            if (ir.authorities?.[key] !== value) throw new Error(`unexpected Contract IR authority ${key}: ${JSON.stringify(ir.authorities?.[key])}`);
           }
-          if (ir.admission?.requirements?.generatedSchemaComparison !== true) {
-            throw new Error('Contract IR did not require generated-schema comparison');
-          }
-          if (report.coverage?.typespecGeneratedJsonSchemaComparison !== true) {
-            throw new Error('parity report did not record TypeSpec-generated JSON Schema comparison');
-          }
-          if (authoredReal === generatedReal) {
-            throw new Error('authored Schema A and generated Schema B resolve to the same file');
-          }
+          if (ir.admission?.requirements?.generatedSchemaComparison !== true) throw new Error('generated Schema B comparison is not required');
+          if (report.status !== 'passed' || report.zeroUnexplainedFindings !== true) throw new Error(`positive parity report is not clean: ${report.status}`);
+          if (report.authorities?.typespec?.authority !== 'independently-authored') throw new Error('TypeSpec lost independent authority status');
+          if (report.authorities?.jsonSchema?.authority !== 'independently-authored') throw new Error('JSON Schema lost independent authority status');
+          if (report.authorities?.typespec?.generatedJsonSchemaRole !== 'comparison-evidence-only') throw new Error('Schema B is not comparison-only evidence');
+          if (report.authorities?.precedence !== 'none') throw new Error(`unexpected authority precedence: ${report.authorities?.precedence}`);
+          if (report.coverage?.typespecGeneratedJsonSchemaComparison !== true) throw new Error('Schema-B-to-Schema-A comparison missing');
+          if (report.coverage?.differentialInstanceValidation !== true) throw new Error('differential validation missing');
+          if (report.coverage?.sourceMutationCheck !== true) throw new Error('source mutation check missing');
+          const counts = report.counts ?? {};
+          if (!(counts.typespecDeclarations > 0)) throw new Error(`missing TypeSpec declarations: ${JSON.stringify(counts)}`);
+          if (counts.typespecDeclarations !== counts.generatedDeclarations || counts.generatedDeclarations !== counts.authoredDeclarations) throw new Error(`declaration inventories disagree: ${JSON.stringify(counts)}`);
+          const summary = report.differential?.summary ?? {};
+          if (!(summary.probesEvaluated > 0) || summary.divergences !== 0 || summary.refusals !== 0) throw new Error(`differential proof incomplete: ${JSON.stringify(summary)}`);
+          if (authored.$schema !== 'https://json-schema.org/draft/2020-12/schema') throw new Error(`authored Schema A dialect mismatch: ${authored.$schema}`);
+          if (generated.$schema !== 'https://json-schema.org/draft/2020-12/schema') throw new Error(`generated Schema B dialect mismatch: ${generated.$schema}`);
+          if (authoredReal === generatedReal) throw new Error('authored Schema A and generated Schema B resolve to the same file');
           NODE
-      - name: Prepare TypeSpec-only message drift
+
+      - name: Mutate only TypeSpec authority in place
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .typespec-json-schema-validator/message-typespec-drift/source
-          sed 's/message_id: string;/message_id: boolean;/' contracts/message-signal/main.tsp > .typespec-json-schema-validator/message-typespec-drift/source/main.tsp
-      - name: TypeSpec-only message drift must stop parity
+          sed -i 's/@maxLength(160)/@maxLength(159)/' contracts/message-signal/main.tsp
+          grep -Fq '@maxLength(159)' contracts/message-signal/main.tsp
+          ! git diff --quiet -- contracts/message-signal/main.tsp
+      - name: TypeSpec-only semantic drift must stop parity
         id: typespec_drift
         continue-on-error: true
         uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
         with:
-          typespec: .typespec-json-schema-validator/message-typespec-drift/source/main.tsp
+          typespec: contracts/message-signal/main.tsp
           schema: contracts/message-signal/authored.schema.json
+          instances: contracts/message-signal/instances
           report: .typespec-json-schema-validator/message-typespec-drift/report.json
           contract_ir: .typespec-json-schema-validator/message-typespec-drift/contract-ir.json
           output_dir: .typespec-json-schema-validator/message-typespec-drift/generated
           max_probes: "64"
-      - name: Assert TypeSpec-only drift was rejected
+      - name: Restore authored TypeSpec authority
+        if: always()
+        run: git checkout -- contracts/message-signal/main.tsp
+      - name: Assert TypeSpec-only semantic drift was rejected
+        if: always()
         env:
           OUTCOME: ${{ steps.typespec_drift.outcome }}
-        run: test "$OUTCOME" = failure
-      - name: Prepare JSON-Schema-only message drift
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .typespec-json-schema-validator/message-json-drift/source
-          cp contracts/message-signal/authored.schema.json .typespec-json-schema-validator/message-json-drift/source/authored.schema.json
+          test "$OUTCOME" = failure
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const report = JSON.parse(await readFile('.typespec-json-schema-validator/message-typespec-drift/report.json', 'utf8'));
+          if (report.status !== 'stopped_for_evaluation') throw new Error(`unexpected TypeSpec drift status: ${report.status}`);
+          if (!Array.isArray(report.findings) || report.findings.length === 0) throw new Error('TypeSpec-only drift produced no findings');
+          NODE
+
+      - name: Mutate only authored JSON Schema authority in place
+        shell: bash
+        run: |
+          set -euo pipefail
           node --input-type=module <<'NODE'
           import { readFile, writeFile } from 'node:fs/promises';
-          const path = '.typespec-json-schema-validator/message-json-drift/source/authored.schema.json';
+          const path = 'contracts/message-signal/authored.schema.json';
           const schema = JSON.parse(await readFile(path, 'utf8'));
-          schema.$defs.MessageSignalV1.properties.message_id.type = 'boolean';
+          schema.$defs.MessageSignalV1.properties.message_id.maxLength = 159;
           await writeFile(path, `${JSON.stringify(schema, null, 2)}\n`);
           NODE
-      - name: JSON-Schema-only message drift must stop parity
+          ! git diff --quiet -- contracts/message-signal/authored.schema.json
+      - name: JSON-Schema-only semantic drift must stop parity
         id: json_schema_drift
         continue-on-error: true
         uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
         with:
           typespec: contracts/message-signal/main.tsp
-          schema: .typespec-json-schema-validator/message-json-drift/source/authored.schema.json
+          schema: contracts/message-signal/authored.schema.json
+          instances: contracts/message-signal/instances
           report: .typespec-json-schema-validator/message-json-drift/report.json
           contract_ir: .typespec-json-schema-validator/message-json-drift/contract-ir.json
           output_dir: .typespec-json-schema-validator/message-json-drift/generated
           max_probes: "64"
-      - name: Assert JSON-Schema-only drift was rejected
+      - name: Restore authored JSON Schema authority
+        if: always()
+        run: git checkout -- contracts/message-signal/authored.schema.json
+      - name: Assert JSON-Schema-only semantic drift was rejected
+        if: always()
         env:
           OUTCOME: ${{ steps.json_schema_drift.outcome }}
-        run: test "$OUTCOME" = failure
-      - name: Verify authored message authorities are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const report = JSON.parse(await readFile('.typespec-json-schema-validator/message-json-drift/report.json', 'utf8'));
+          if (report.status !== 'stopped_for_evaluation') throw new Error(`unexpected JSON Schema drift status: ${report.status}`);
+          if (!Array.isArray(report.findings) || report.findings.length === 0) throw new Error('JSON-Schema-only drift produced no findings');
+          NODE
+
+      - name: Verify both authored authorities are restored unchanged
         run: git diff --exit-code -- contracts/message-signal
       - name: Retain diagnostic evidence
         if: ${{ always() }}
