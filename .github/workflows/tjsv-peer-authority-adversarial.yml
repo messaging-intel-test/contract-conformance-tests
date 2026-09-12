@@ -64,9 +64,11 @@ jobs:
           const reportPath = '.typespec-json-schema-validator/message-pass/report.json';
           const authoredPath = 'contracts/message-signal/authored.schema.json';
           const generatedPath = '.typespec-json-schema-validator/message-pass/generated/typespec.generated.schema.json';
-          const [ir, report, authoredReal, generatedReal] = await Promise.all([
+          const [ir, report, authored, generated, authoredReal, generatedReal] = await Promise.all([
             readFile(irPath, 'utf8').then(JSON.parse),
             readFile(reportPath, 'utf8').then(JSON.parse),
+            readFile(authoredPath, 'utf8').then(JSON.parse),
+            readFile(generatedPath, 'utf8').then(JSON.parse),
             realpath(authoredPath),
             realpath(generatedPath),
           ]);
@@ -84,8 +86,46 @@ jobs:
           if (ir.admission?.requirements?.generatedSchemaComparison !== true) {
             throw new Error('Contract IR did not require generated-schema comparison');
           }
+          if (report.status !== 'passed' || report.zeroUnexplainedFindings !== true) {
+            throw new Error(`positive parity report is not clean: ${report.status}`);
+          }
+          if (report.authorities?.typespec?.authority !== 'independently-authored') {
+            throw new Error('report did not preserve TypeSpec as an independently authored authority');
+          }
+          if (report.authorities?.jsonSchema?.authority !== 'independently-authored') {
+            throw new Error('report did not preserve JSON Schema as an independently authored authority');
+          }
+          if (report.authorities?.typespec?.generatedJsonSchemaRole !== 'comparison-evidence-only') {
+            throw new Error('report did not mark generated Schema B as comparison-only evidence');
+          }
+          if (report.authorities?.precedence !== 'none') {
+            throw new Error(`unexpected report authority precedence: ${report.authorities?.precedence}`);
+          }
           if (report.coverage?.typespecGeneratedJsonSchemaComparison !== true) {
             throw new Error('parity report did not record TypeSpec-generated JSON Schema comparison');
+          }
+          if (report.coverage?.differentialInstanceValidation !== true) {
+            throw new Error('parity report did not execute differential instance validation');
+          }
+          if (report.coverage?.sourceMutationCheck !== true) {
+            throw new Error('parity report did not prove source immutability during check');
+          }
+          const counts = report.counts ?? {};
+          if (!(counts.typespecDeclarations > 0)) {
+            throw new Error(`missing TypeSpec declaration inventory: ${JSON.stringify(counts)}`);
+          }
+          if (counts.typespecDeclarations !== counts.generatedDeclarations || counts.generatedDeclarations !== counts.authoredDeclarations) {
+            throw new Error(`declaration inventories disagree: ${JSON.stringify(counts)}`);
+          }
+          const summary = report.differential?.summary ?? {};
+          if (!(summary.probesEvaluated > 0) || summary.divergences !== 0 || summary.refusals !== 0) {
+            throw new Error(`differential proof is incomplete: ${JSON.stringify(summary)}`);
+          }
+          if (authored.$schema !== 'https://json-schema.org/draft/2020-12/schema') {
+            throw new Error(`authored Schema A is not Draft 2020-12: ${authored.$schema}`);
+          }
+          if (generated.$schema !== 'https://json-schema.org/draft/2020-12/schema') {
+            throw new Error(`generated Schema B is not Draft 2020-12: ${generated.$schema}`);
           }
           if (authoredReal === generatedReal) {
             throw new Error('authored Schema A and generated Schema B resolve to the same file');
@@ -103,14 +143,28 @@ jobs:
         with:
           typespec: .typespec-json-schema-validator/message-typespec-drift/source/main.tsp
           schema: contracts/message-signal/authored.schema.json
+          instances: contracts/message-signal/instances
           report: .typespec-json-schema-validator/message-typespec-drift/report.json
           contract_ir: .typespec-json-schema-validator/message-typespec-drift/contract-ir.json
           output_dir: .typespec-json-schema-validator/message-typespec-drift/generated
           max_probes: "64"
       - name: Assert TypeSpec-only drift was rejected
+        if: always()
         env:
           OUTCOME: ${{ steps.typespec_drift.outcome }}
-        run: test "$OUTCOME" = failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const report = JSON.parse(await readFile('.typespec-json-schema-validator/message-typespec-drift/report.json', 'utf8'));
+          if (report.status !== 'stopped_for_evaluation') throw new Error(`unexpected TypeSpec drift status: ${report.status}`);
+          if (!Array.isArray(report.findings) || report.findings.length === 0) throw new Error('TypeSpec-only drift produced no findings');
+          if (report.authorities?.typespec?.authority !== 'independently-authored' || report.authorities?.jsonSchema?.authority !== 'independently-authored') {
+            throw new Error('TypeSpec drift report lost peer-authority roles');
+          }
+          NODE
       - name: Prepare JSON-Schema-only message drift
         run: |
           set -euo pipefail
@@ -130,14 +184,28 @@ jobs:
         with:
           typespec: contracts/message-signal/main.tsp
           schema: .typespec-json-schema-validator/message-json-drift/source/authored.schema.json
+          instances: contracts/message-signal/instances
           report: .typespec-json-schema-validator/message-json-drift/report.json
           contract_ir: .typespec-json-schema-validator/message-json-drift/contract-ir.json
           output_dir: .typespec-json-schema-validator/message-json-drift/generated
           max_probes: "64"
       - name: Assert JSON-Schema-only drift was rejected
+        if: always()
         env:
           OUTCOME: ${{ steps.json_schema_drift.outcome }}
-        run: test "$OUTCOME" = failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const report = JSON.parse(await readFile('.typespec-json-schema-validator/message-json-drift/report.json', 'utf8'));
+          if (report.status !== 'stopped_for_evaluation') throw new Error(`unexpected JSON Schema drift status: ${report.status}`);
+          if (!Array.isArray(report.findings) || report.findings.length === 0) throw new Error('JSON-Schema-only drift produced no findings');
+          if (report.authorities?.typespec?.authority !== 'independently-authored' || report.authorities?.jsonSchema?.authority !== 'independently-authored') {
+            throw new Error('JSON Schema drift report lost peer-authority roles');
+          }
+          NODE
       - name: Verify authored message authorities are unchanged
         run: git diff --exit-code -- contracts/message-signal
       - name: Retain diagnostic evidence
