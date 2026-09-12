@@ -1,0 +1,71 @@
+name: Peer authority contract
+
+on:
+  pull_request:
+    paths:
+      - "contracts/message-signal/**"
+      - ".github/workflows/peer-authority-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "contracts/message-signal/**"
+      - ".github/workflows/peer-authority-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tjsv-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact Messaging Intel test head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact test revision
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Check out exact canonical TJSV
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ORESoftware/typespec-json-schema-validator
+          ref: 93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+          path: .tjsv
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+
+      - name: Install pinned TJSV dependency closure
+        run: npm ci --prefix .tjsv
+
+      - name: Transpile TypeSpec and compare generated vs authored JSON Schema
+        run: |
+          set -euo pipefail
+          rm -rf .typespec-json-schema-validator/messaging-intel
+          mkdir -p .typespec-json-schema-validator/messaging-intel/generated
+          node .tjsv/bin/typespec-json-schema-validator.mjs check \
+            --typespec contracts/message-signal/main.tsp \
+            --schema contracts/message-signal/authored.schema.json \
+            --instances contracts/message-signal/instances \
+            --output-dir .typespec-json-schema-validator/messaging-intel/generated \
+            --bundle-id typespec.generated.schema.json \
+            --report .typespec-json-schema-validator/messaging-intel/report.json \
+            --sarif .typespec-json-schema-validator/messaging-intel/report.sarif \
+            --contract-ir .typespec-json-schema-validator/messaging-intel/contract-ir.json \
+            --quiet
+          test -s .typespec-json-schema-validator/messaging-intel/generated/typespec.generated.schema.json
+          test -s .typespec-json-schema-validator/messaging-intel/report.json
+          test -s .typespec-json-schema-validator/messaging-intel/contract-ir.json
+          grep -F '"$schema": "https://json-schema.org/draft/2020-12/schema"' \
+            contracts/message-signal/authored.schema.json

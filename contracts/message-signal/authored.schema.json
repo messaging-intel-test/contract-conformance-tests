@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/messaging-intel-test/contract-conformance-tests/contracts/message-signal/authored.schema.json",
+  "$defs": {
+    "MessageSignalV1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "MessageSignalV1",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "token_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "contains_pii": {
+          "type": "boolean"
+        }
+      },
+      "required": ["version", "message_id", "confidence", "token_count", "contains_pii"],
+      "unevaluatedProperties": false
+    }
+  }
+}
