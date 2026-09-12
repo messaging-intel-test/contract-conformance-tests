@@ -54,6 +54,43 @@ jobs:
           generated_schema: .typespec-json-schema-validator/message-pass/generated/typespec.generated.schema.json
           expected_declarations: '["MessagingIntelSignal.MessageSignalV1"]'
           verification: .typespec-json-schema-validator/message-pass/verification.json
+      - name: Assert first-class peer authorities and generated comparison evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFile, realpath } from 'node:fs/promises';
+          const irPath = '.typespec-json-schema-validator/message-pass/contract-ir.json';
+          const reportPath = '.typespec-json-schema-validator/message-pass/report.json';
+          const authoredPath = 'contracts/message-signal/authored.schema.json';
+          const generatedPath = '.typespec-json-schema-validator/message-pass/generated/typespec.generated.schema.json';
+          const [ir, report, authoredReal, generatedReal] = await Promise.all([
+            readFile(irPath, 'utf8').then(JSON.parse),
+            readFile(reportPath, 'utf8').then(JSON.parse),
+            realpath(authoredPath),
+            realpath(generatedPath),
+          ]);
+          const expected = {
+            typespec: 'independently-authored',
+            jsonSchema: 'independently-authored',
+            generatedJsonSchema: 'comparison-evidence-only',
+            precedence: 'none',
+          };
+          for (const [key, value] of Object.entries(expected)) {
+            if (ir.authorities?.[key] !== value) {
+              throw new Error(`unexpected Contract IR authority ${key}: ${JSON.stringify(ir.authorities?.[key])}`);
+            }
+          }
+          if (ir.admission?.requirements?.generatedSchemaComparison !== true) {
+            throw new Error('Contract IR did not require generated-schema comparison');
+          }
+          if (report.coverage?.typespecGeneratedJsonSchemaComparison !== true) {
+            throw new Error('parity report did not record TypeSpec-generated JSON Schema comparison');
+          }
+          if (authoredReal === generatedReal) {
+            throw new Error('authored Schema A and generated Schema B resolve to the same file');
+          }
+          NODE
       - name: Prepare TypeSpec-only message drift
         run: |
           set -euo pipefail
@@ -106,7 +143,7 @@ jobs:
       - name: Retain diagnostic evidence
         if: ${{ always() }}
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7.0.1
         with:
           name: message-peer-authority-adversarial-${{ github.run_id }}
           path: .typespec-json-schema-validator/
