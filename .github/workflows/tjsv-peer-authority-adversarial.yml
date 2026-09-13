@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: 22.16.0
       - name: Transpile TypeSpec and compare independent message JSON Schema
-        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        uses: ORESoftware/typespec-json-schema-validator@c5392b03a405bb5296d1de09ac785b3b097529cd
         with:
           typespec: contracts/message-signal/main.tsp
           schema: contracts/message-signal/authored.schema.json
@@ -45,7 +45,7 @@ jobs:
           output_dir: .typespec-json-schema-validator/message-pass/generated
           max_probes: "64"
       - name: Verify current evidence and nineteen refusal regressions
-        uses: ORESoftware/typespec-json-schema-validator/actions/test-consumer-admission@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        uses: ORESoftware/typespec-json-schema-validator/actions/test-consumer-admission@c5392b03a405bb5296d1de09ac785b3b097529cd
         with:
           contract_ir: .typespec-json-schema-validator/message-pass/contract-ir.json
           report: .typespec-json-schema-validator/message-pass/report.json
@@ -110,7 +110,7 @@ jobs:
       - name: TypeSpec-only semantic drift must stop parity
         id: typespec_drift
         continue-on-error: true
-        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        uses: ORESoftware/typespec-json-schema-validator@c5392b03a405bb5296d1de09ac785b3b097529cd
         with:
           typespec: contracts/message-signal/main.tsp
           schema: contracts/message-signal/authored.schema.json
@@ -152,7 +152,7 @@ jobs:
       - name: JSON-Schema-only semantic drift must stop parity
         id: json_schema_drift
         continue-on-error: true
-        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        uses: ORESoftware/typespec-json-schema-validator@c5392b03a405bb5296d1de09ac785b3b097529cd
         with:
           typespec: contracts/message-signal/main.tsp
           schema: contracts/message-signal/authored.schema.json
