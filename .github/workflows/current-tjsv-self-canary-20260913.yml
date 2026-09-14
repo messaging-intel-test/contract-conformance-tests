@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          root="$RUNNER_TEMP/tjsv-canary"
+          root="$GITHUB_WORKSPACE/.typespec-json-schema-validator/canary/source"
           mkdir -p "$root/instances/AuthFactorPolicyV1/valid" "$root/instances/AuthFactorPolicyV1/invalid"
           cat > "$root/main.tsp" <<'TSP'
           import "@typespec/json-schema";
@@ -49,9 +49,9 @@ jobs:
       - name: Compile TypeSpec to Schema B and compare authored Schema A
         uses: ORESoftware/typespec-json-schema-validator@a952c53b4628b1d12e21ed51879d910a8c19a581
         with:
-          typespec: ${{ runner.temp }}/tjsv-canary/main.tsp
-          schema: ${{ runner.temp }}/tjsv-canary/authored.schema.json
-          instances: ${{ runner.temp }}/tjsv-canary/instances
+          typespec: .typespec-json-schema-validator/canary/source/main.tsp
+          schema: .typespec-json-schema-validator/canary/source/authored.schema.json
+          instances: .typespec-json-schema-validator/canary/source/instances
           report: .typespec-json-schema-validator/canary/report.json
           contract_ir: .typespec-json-schema-validator/canary/contract-ir.json
           output_dir: .typespec-json-schema-validator/canary/generated
@@ -60,8 +60,8 @@ jobs:
         with:
           contract_ir: .typespec-json-schema-validator/canary/contract-ir.json
           report: .typespec-json-schema-validator/canary/report.json
-          typespec: ${{ runner.temp }}/tjsv-canary/main.tsp
-          schema: ${{ runner.temp }}/tjsv-canary/authored.schema.json
+          typespec: .typespec-json-schema-validator/canary/source/main.tsp
+          schema: .typespec-json-schema-validator/canary/source/authored.schema.json
           generated_schema: .typespec-json-schema-validator/canary/generated/typespec.generated.schema.json
           expected_declarations: '["ThreeFaAuthFactorPolicy.AuthFactorPolicyV1"]'
       - name: Require first-class peer authority admission
