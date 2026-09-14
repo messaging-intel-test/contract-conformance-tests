@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      GH_TOKEN: ${{ secrets.TEST_FLEET_GITHUB_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.TEST_FLEET_READ_TOKEN || github.token }}
     steps:
       - name: Check out exact test head
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -71,7 +71,7 @@ jobs:
           set -euo pipefail
           gh api --paginate "/orgs/$PRODUCTION_OWNER/repos?type=all&per_page=100" \
             --jq '.[] | select(.archived|not) | [.name,.default_branch] | @tsv' >/tmp/repos
-          test -s /tmp/repos || { echo "No admitted production repositories visible; configure TEST_FLEET_GITHUB_TOKEN" >&2; exit 1; }
+          test -s /tmp/repos || { echo "No admitted production repositories visible; configure TEST_FLEET_READ_TOKEN" >&2; exit 1; }
           : >/tmp/exact-tips
           while IFS=$'\t' read -r r branch; do
             sha="$(gh api "/repos/$PRODUCTION_OWNER/$r/commits/$branch" --jq .sha)"
