@@ -2,7 +2,7 @@
   "contractVersion": 1,
   "linearIssue": "DEN-3040",
   "productRepository": "messaging-intel/msgint-lib-core",
-  "revision": "435e61d8f65b6b5c4f96f0bf0cf57443a77a77ce",
+  "revision": "b8908beee593200b4a0e80dc63d164b6fc0b6711",
   "schema": "messaging_intel",
   "purpose": "message_search",
   "expected": {
@@ -11,10 +11,6 @@
     "fullPrecisionIndexCeiling": 2000,
     "halfPrecisionIndexCeiling": 4000,
     "maximumSourceDimensions": 4096,
-    "targets": [
-      "postgresql",
-      "neon",
-      "supabase"
-    ]
+    "targets": ["postgresql", "neon", "supabase"]
   }
 }
