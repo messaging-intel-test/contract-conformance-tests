@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "status": "active",
+  "testOwner": {
+    "login": "messaging-intel-test",
+    "id": 313178908,
+    "type": "Organization"
+  },
+  "productionOwner": {
+    "login": "messaging-intel",
+    "id": 308168184,
+    "type": "Organization"
+  },
+  "scope": {
+    "kind": "organization-current-tips",
+    "includeArchived": false
+  },
+  "evidenceAnchors": [
+    {
+      "file": "vector-source-pin.json",
+      "repositoryField": "productRepository"
+    }
+  ],
+  "policy": {
+    "suffixInferenceAuthoritative": false,
+    "bindExactDefaultBranchSha": true,
+    "privateVisibilityFailsClosed": true,
+    "externalGreenDoesNotReplaceProductCi": true
+  }
+}
