@@ -74,20 +74,17 @@ const tenant = "11111111-1111-4111-8111-111111111111";
 const fixture = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const repairFixture = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-// 1. Trigger exists and is enabled.
 check("projection trigger exists and is enabled",
   scalar(`SELECT count(*) FROM pg_trigger
     WHERE tgrelid='${exact}'::regclass
       AND tgname='semantic_embeddings_sync_index_4000'
       AND NOT tgisinternal AND tgenabled <> 'D'`) === "1");
 
-// 2. Trigger function must remain SECURITY INVOKER.
 check("projection trigger function is SECURITY INVOKER",
   scalar(`SELECT NOT p.prosecdef FROM pg_proc p
     JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='${schema}' AND p.proname='sync_semantic_embedding_index_4000'`) === "t");
 
-// 3. Trigger function pins an empty search_path.
 check("projection trigger function pins an empty search_path",
   scalar(`SELECT coalesce(array_to_string(p.proconfig,'|'),'') LIKE '%search_path=""%'
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
@@ -101,7 +98,6 @@ VALUES
    1536,${schema}.pad_embedding_4100(array_fill(0.01::real,ARRAY[1536])),
    'provider',repeat('1',64),'lifecycle fixture','{"phase":1}'::jsonb);`);
 
-// 4. Exact insert creates exactly one ANN projection.
 check("exact insert creates exactly one ANN projection",
   scalar(`SELECT count(*) FROM ${indexed} WHERE embedding_id='${fixture}'`) === "1");
 
@@ -111,19 +107,16 @@ run(`UPDATE ${exact}
   WHERE embedding_id='${fixture}';`);
 const afterProjection = scalar(`SELECT indexed_embedding::text FROM ${indexed} WHERE embedding_id='${fixture}'`);
 
-// 5. Exact vector update refreshes the derived projection in place.
 check("exact vector update refreshes the ANN projection",
   beforeProjection !== afterProjection && afterProjection.length > 0);
 
 run(`UPDATE ${exact} SET metadata='{"phase":2,"note":"metadata-only"}'::jsonb WHERE embedding_id='${fixture}';`);
 
-// 6. Metadata-only updates never duplicate the projection row.
 check("metadata-only update preserves one-to-one projection cardinality",
   scalar(`SELECT count(*) FROM ${indexed} WHERE embedding_id='${fixture}'`) === "1");
 
 run(`DELETE FROM ${exact} WHERE embedding_id='${fixture}';`);
 
-// 7. Deleting the exact authority cascades to its projection.
 check("exact delete cascades to the ANN projection",
   scalar(`SELECT count(*) FROM ${indexed} WHERE embedding_id='${fixture}'`) === "0");
 
@@ -135,22 +128,20 @@ VALUES
    1536,${schema}.pad_embedding_4100(array_fill(0.03::real,ARRAY[1536])),
    'provider',repeat('2',64),'reconciliation fixture');`);
 run(`DELETE FROM ${indexed} WHERE embedding_id='${repairFixture}';`);
-check("test fixture actually removes the projection before repair",
-  scalar(`SELECT count(*) FROM ${indexed} WHERE embedding_id='${repairFixture}'`) === "0");
+if (scalar(`SELECT count(*) FROM ${indexed} WHERE embedding_id='${repairFixture}'`) !== "0") {
+  throw new Error("test setup failed to remove the projection before reconciliation");
+}
 runFile(reconcile);
 
-// 8. Product reconciliation repairs a missing projection.
 check("reconciliation repairs a missing ANN projection",
   scalar(`SELECT count(*) FROM ${indexed} WHERE embedding_id='${repairFixture}'`) === "1");
 
 const reconciliationFingerprint = scalar(`SELECT count(*) || '|' || md5(string_agg(embedding_id::text || ':' || indexed_embedding::text, ',' ORDER BY embedding_id)) FROM ${indexed}`);
 runFile(reconcile);
 
-// 9. Reconciliation is idempotent when re-run without source changes.
 check("reconciliation is idempotent on an already-converged index",
   scalar(`SELECT count(*) || '|' || md5(string_agg(embedding_id::text || ':' || indexed_embedding::text, ',' ORDER BY embedding_id)) FROM ${indexed}`) === reconciliationFingerprint);
 
-// 10. A non-zero padding tail is rejected at the database boundary.
 check("non-zero padding tail is rejected",
   mustFail(`INSERT INTO ${exact}
     (tenant_id,entity_kind,entity_id,purpose,embedding_provider,model,original_dimensions,embedding,normalization,content_hash)
@@ -159,7 +150,6 @@ check("non-zero padding tail is rejected",
      (array_fill(0.01::real,ARRAY[1536]) || ARRAY[0.5::real] || array_fill(0.0::real,ARRAY[2563]))::extensions.vector(4100),
      'provider',repeat('3',64));`));
 
-// 11. Unknown provider/model pairs are rejected by the model-profile FK.
 check("unknown embedding model is rejected by the model-profile foreign key",
   mustFail(`INSERT INTO ${exact}
     (tenant_id,entity_kind,entity_id,purpose,embedding_provider,model,original_dimensions,embedding,normalization,content_hash)
@@ -167,22 +157,18 @@ check("unknown embedding model is rejected by the model-profile foreign key",
     ('${tenant}','lifecycle_test','bad-model','${purpose}','openai','not-a-real-embedding-model',1536,
      ${schema}.pad_embedding_4100(array_fill(0.01::real,ARRAY[1536])),'provider',repeat('4',64));`));
 
-// 12. Both exact and ANN tables have RLS enabled and forced.
 check("exact and ANN tables both FORCE row-level security",
   scalar(`SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='${schema}'
       AND c.relname IN ('semantic_embeddings','semantic_embedding_index')
       AND c.relrowsecurity AND c.relforcerowsecurity`) === "2");
 
-// 13. Anonymous clients cannot even use the private product schema.
 check("anon has no USAGE on the private product schema",
   scalar(`SELECT has_schema_privilege('anon','${schema}','USAGE')`) === "f");
 
-// 14. Authenticated browser clients cannot use the private product schema either.
 check("authenticated has no USAGE on the private product schema",
   scalar(`SELECT has_schema_privilege('authenticated','${schema}','USAGE')`) === "f");
 
-// 15. Even service_role cannot directly invoke the internal trigger routine.
 check("service_role cannot directly execute the internal projection trigger function",
   scalar(`SELECT has_function_privilege('service_role','${triggerFunction}','EXECUTE')`) === "f");
 
