@@ -1,0 +1,117 @@
+name: explicit counterpart current-tip contract system
+on:
+  pull_request:
+    paths:
+      - 'counterpart-source.json'
+      - 'vector-source-pin.json'
+      - '.github/workflows/explicit-counterpart-current-tips.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'counterpart-source.json'
+      - 'vector-source-pin.json'
+      - '.github/workflows/explicit-counterpart-current-tips.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  current-production-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.TEST_FLEET_READ_TOKEN || github.token }}
+    steps:
+      - name: Check out exact test head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Bind exact test revision and admitted identities
+        id: identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          jq -e '.schemaVersion == 1 and .status == "active"' counterpart-source.json >/dev/null
+          test "$(jq -r '.testOwner.login' counterpart-source.json)" = "$GITHUB_REPOSITORY_OWNER"
+          test "$(jq -r '.testOwner.type' counterpart-source.json)" = "Organization"
+          test "$(jq -r '.productionOwner.type' counterpart-source.json)" = "Organization"
+          test "$(jq -r '.policy.suffixInferenceAuthoritative' counterpart-source.json)" = "false"
+          test "$(jq -r '.policy.bindExactDefaultBranchSha' counterpart-source.json)" = "true"
+          p="$(jq -r '.productionOwner.login' counterpart-source.json)"
+          expected_pid="$(jq -r '.productionOwner.id' counterpart-source.json)"
+          expected_tid="$(jq -r '.testOwner.id' counterpart-source.json)"
+          actual_tid="$(gh api "/orgs/$GITHUB_REPOSITORY_OWNER" --jq .id)"
+          actual_pid="$(gh api "/orgs/$p" --jq .id)"
+          test "$actual_tid" = "$expected_tid"
+          test "$actual_pid" = "$expected_pid"
+          printf 'production_owner=%s\n' "$p" >> "$GITHUB_OUTPUT"
+
+      - name: Prove repo-local product pin belongs to the admitted owner
+        shell: bash
+        env:
+          PRODUCTION_OWNER: ${{ steps.identity.outputs.production_owner }}
+        run: |
+          set -euo pipefail
+          pinned_repo="$(jq -r '.productRepository' vector-source-pin.json)"
+          pinned_sha="$(jq -r '.revision' vector-source-pin.json)"
+          case "$pinned_repo" in "$PRODUCTION_OWNER"/*) ;; *) echo "pin escapes admitted owner: $pinned_repo" >&2; exit 1;; esac
+          [[ "$pinned_sha" =~ ^[0-9a-f]{40}$ ]]
+          gh api "/repos/$pinned_repo/commits/$pinned_sha" --jq .sha | grep -Fxq "$pinned_sha"
+
+      - name: Enumerate only the admitted production organization and bind current tips
+        shell: bash
+        env:
+          PRODUCTION_OWNER: ${{ steps.identity.outputs.production_owner }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "/orgs/$PRODUCTION_OWNER/repos?type=all&per_page=100" \
+            --jq '.[] | select(.archived|not) | [.name,.default_branch] | @tsv' >/tmp/repos
+          test -s /tmp/repos || { echo "No admitted production repositories visible; configure TEST_FLEET_READ_TOKEN" >&2; exit 1; }
+          : >/tmp/exact-tips
+          while IFS=$'\t' read -r r branch; do
+            sha="$(gh api "/repos/$PRODUCTION_OWNER/$r/commits/$branch" --jq .sha)"
+            [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+            printf '%s\t%s\t%s\n' "$r" "$branch" "$sha" >>/tmp/exact-tips
+          done </tmp/repos
+          test "$(wc -l </tmp/exact-tips)" -eq "$(wc -l </tmp/repos)"
+
+      - name: Require a first-class contract or build authority at an exact current tip
+        shell: bash
+        env:
+          PRODUCTION_OWNER: ${{ steps.identity.outputs.production_owner }}
+        run: |
+          set -euo pipefail
+          found=0
+          scanned=0
+          while IFS=$'\t' read -r r branch sha; do
+            scanned=$((scanned + 1))
+            for marker in .zpkg.toml .ores-infra.toml Cargo.toml package.json pyproject.toml go.mod pubspec.yaml; do
+              if gh api "/repos/$PRODUCTION_OWNER/$r/contents/$marker?ref=$sha" >/dev/null 2>&1; then
+                echo "authority/build marker: $PRODUCTION_OWNER/$r@$sha -> $marker"
+                found=1
+                break
+              fi
+            done
+            ((found == 1)) && break
+            paths="$(gh api "/repos/$PRODUCTION_OWNER/$r/git/trees/$sha?recursive=1" --jq '.tree[]?.path' 2>/dev/null || true)"
+            if grep -Eiq '(\.tsp$|\.proto$|\.wit$|(^|/)openapi[^/]*\.(json|ya?ml)$|(^|/)[^/]*schema[^/]*\.json$)' <<<"$paths"; then
+              echo "nested contract authority: $PRODUCTION_OWNER/$r@$sha"
+              found=1
+              break
+            fi
+          done </tmp/exact-tips
+          ((scanned > 0))
+          ((found == 1)) || { echo "No current contract/build authority found in admitted production scope" >&2; exit 1; }
+
+      - name: zed-pkg dependency tip is reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="$(gh api repos/zed-pkg/zed-cli --jq .default_branch)"
+          sha="$(gh api "repos/zed-pkg/zed-cli/commits/$branch" --jq .sha)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
