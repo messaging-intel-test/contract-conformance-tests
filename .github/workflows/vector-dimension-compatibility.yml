@@ -1,0 +1,47 @@
+name: vector dimension compatibility admission
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vector-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "22.22.1"
+      - name: Prove embedding model and vector dimension compatibility
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const models = new Map([
+            ['text-embedding-v1', { dimension: 1536, fingerprint: 'sha256:model-v1' }],
+            ['text-embedding-large', { dimension: 3072, fingerprint: 'sha256:model-large' }],
+          ]);
+          const index = { model: 'text-embedding-v1', dimension: 1536, fingerprint: 'sha256:model-v1' };
+          const admit = ({ model, fingerprint, vector }) => {
+            const spec = models.get(model);
+            if (!spec) throw new Error('unknown_model');
+            if (model !== index.model || fingerprint !== index.fingerprint) throw new Error('model_fingerprint_drift');
+            if (spec.dimension !== index.dimension || vector.length !== index.dimension) throw new Error('dimension_mismatch');
+            return true;
+          };
+          assert.equal(admit({ model: 'text-embedding-v1', fingerprint: 'sha256:model-v1', vector: Array(1536).fill(0) }), true);
+          assert.throws(() => admit({ model: 'text-embedding-v1', fingerprint: 'sha256:model-v1', vector: Array(1535).fill(0) }), /dimension_mismatch/);
+          assert.throws(() => admit({ model: 'text-embedding-v1', fingerprint: 'sha256:changed', vector: Array(1536).fill(0) }), /model_fingerprint_drift/);
+          assert.throws(() => admit({ model: 'text-embedding-large', fingerprint: 'sha256:model-large', vector: Array(3072).fill(0) }), /model_fingerprint_drift/);
+          const cosine = (a, b) => {
+            if (a.length !== b.length) throw new Error('dimension_mismatch');
+            return a.reduce((n, x, i) => n + x * b[i], 0);
+          };
+          assert.throws(() => cosine([1, 2], [1]), /dimension_mismatch/);
+          NODE
