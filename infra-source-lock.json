@@ -1,0 +1,12 @@
+{
+  "source_repo": "messaging-intel/msgint-infra",
+  "source_pr": 18,
+  "source_head_sha": "5205870585121b830370143c0ace48e07e636e89",
+  "files": {
+    ".ores-infra.toml": "41fd16206513690db4f4aaaa7e22c006fbea6960",
+    "environments/preview/main.tf": "937a5a2cd1b6187dec747dd2ed5e384918ab1253",
+    "environments/staging/main.tf": "feb5a950e8c4e4e4263f99189c71c447f63b58c9",
+    "environments/production/main.tf": "7c6eb1acf97d3c43524bf026202116c11b89db48",
+    "modules/cloudflare/terraform/worker-shell/main.tf": "24f62e017c4d3ae311663d7e0429f976a6013b5b"
+  }
+}
