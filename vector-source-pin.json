@@ -1,8 +1,8 @@
 {
   "contractVersion": 1,
-  "linearIssue": "DEN-3040",
+  "linearIssue": "DEN-3903",
   "productRepository": "messaging-intel/msgint-lib-core",
-  "revision": "b8908beee593200b4a0e80dc63d164b6fc0b6711",
+  "revision": "3797f890a49a020516ea183151c05717c33e5873",
   "schema": "messaging_intel",
   "purpose": "message_search",
   "expected": {
