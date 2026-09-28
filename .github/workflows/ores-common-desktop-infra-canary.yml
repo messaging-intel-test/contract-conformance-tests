@@ -102,6 +102,15 @@ jobs:
           rm -rf /tmp/ores_common_mobile_host_android
           flutter create --platforms=android --project-name ores_host_canary /tmp/ores_common_mobile_host_android
           cd /tmp/ores_common_mobile_host_android
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/build.gradle.kts')
+          text = path.read_text()
+          old = 'minSdk = flutter.minSdkVersion'
+          if old not in text:
+              raise SystemExit('generated Flutter app minSdk declaration changed')
+          path.write_text(text.replace(old, 'minSdk = 26'))
+          PY
           flutter pub add ores_common_mobile_host --path "$package"
           flutter build apk --debug
 
