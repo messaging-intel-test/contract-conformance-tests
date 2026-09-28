@@ -33,14 +33,14 @@ jobs:
           toolchain: 1.90.0
           components: rustfmt, clippy
 
-      - name: Format changed source
+      - name: Format exact changed source
         working-directory: certifications/beamscale-desktop-app-pr18
-        run: cargo +1.90.0 fmt -- src/main.rs --check
+        run: rustfmt +1.90.0 --check src/main.rs
 
-      - name: Clippy
+      - name: Clippy integration
         working-directory: certifications/beamscale-desktop-app-pr18
         run: cargo +1.90.0 clippy --all-targets -- -D warnings
 
-      - name: Test
+      - name: Test integration
         working-directory: certifications/beamscale-desktop-app-pr18
         run: cargo +1.90.0 test --all-targets
