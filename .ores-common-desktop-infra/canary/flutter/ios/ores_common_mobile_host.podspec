@@ -9,7 +9,7 @@ Shared platform bridge for ORES mobile hosting, including iOS wake-and-drain Bac
   s.license          = { :type => 'MIT' }
   s.author           = { 'ORESoftware' => 'alex@oresoftware.com' }
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files     = 'ores_common_mobile_host/Sources/ores_common_mobile_host/**/*.swift'
   s.dependency 'Flutter'
   s.platform         = :ios, '13.0'
   s.swift_version    = '5.9'
