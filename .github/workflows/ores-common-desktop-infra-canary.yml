@@ -1,0 +1,137 @@
+name: ORES common desktop infra canary
+
+on:
+  pull_request:
+    paths:
+      - '.ores-common-desktop-infra/canary/**'
+      - '.github/workflows/ores-common-desktop-infra-canary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_PACKAGE: .ores-common-desktop-infra/canary/flutter
+
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.82.0'
+      - name: Test Rust shared infra/CLI/daemon/desktop-app contracts
+        run: cargo test --manifest-path .ores-common-desktop-infra/canary/rust/Cargo.toml --workspace --all-targets
+
+  beam:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27'
+          rebar3-version: '3.24.0'
+      - name: Compile BEAM route and hot-upgrade primitives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ores_beam_canary
+          erlc -Werror -o /tmp/ores_beam_canary .ores-common-desktop-infra/canary/beam/*.erl
+
+  terraform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+      - name: Validate local appliance Terraform projection
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive .ores-common-desktop-infra/canary/terraform
+          terraform -chdir=.ores-common-desktop-infra/canary/terraform init -backend=false
+          terraform -chdir=.ores-common-desktop-infra/canary/terraform validate
+
+  flutter-dart:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Analyze and test shared Flutter host package
+        working-directory: ${{ env.FLUTTER_PACKAGE }}
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+  android-consumer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build Android app consuming the shared plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$GITHUB_WORKSPACE/$FLUTTER_PACKAGE"
+          rm -rf /tmp/ores_common_mobile_host_android
+          flutter create --platforms=android --project-name ores_host_canary /tmp/ores_common_mobile_host_android
+          cd /tmp/ores_common_mobile_host_android
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/build.gradle.kts')
+          text = path.read_text()
+          old = 'minSdk = flutter.minSdkVersion'
+          if old not in text:
+              raise SystemExit('generated Flutter app minSdk declaration changed')
+          path.write_text(text.replace(old, 'minSdk = 26'))
+          PY
+          flutter pub add ores_common_mobile_host --path "$package"
+          flutter build apk --debug
+
+  ios-consumer:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build iOS app consuming wake-and-drain plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$GITHUB_WORKSPACE/$FLUTTER_PACKAGE"
+          rm -rf /tmp/ores_common_mobile_host_ios
+          flutter create --platforms=ios --project-name ores_host_canary /tmp/ores_common_mobile_host_ios
+          cd /tmp/ores_common_mobile_host_ios
+          flutter pub add ores_common_mobile_host --path "$package"
+          flutter build ios --debug --no-codesign

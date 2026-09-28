@@ -1,0 +1,13 @@
+[package]
+name = "ores-common-desktop-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ores-common-desktop-cli = { path = "../../cli/rust" }
+ores-common-desktop-daemon = { path = "../../daemon/rust" }
+ores-common-desktop-infra = { path = "../../infra/rust" }
+serde.workspace = true
+thiserror.workspace = true

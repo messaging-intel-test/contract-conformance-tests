@@ -1,0 +1,25 @@
+name: ores_common_mobile_host
+description: Shared Flutter control and mobile hosting shell for ORES desktop/mobile self-hosting products.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.oresoftware.common_desktop_infra
+        pluginClass: OresCommonMobileHostPlugin
+      ios:
+        pluginClass: OresCommonMobileHostPlugin
