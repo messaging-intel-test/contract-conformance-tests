@@ -27,6 +27,40 @@ jobs:
       - name: Test Rust shared infra/CLI/daemon/desktop-app contracts
         run: cargo test --manifest-path .ores-common-desktop-infra/canary/rust/Cargo.toml --workspace --all-targets
 
+  beam:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27'
+          rebar3-version: '3.24.0'
+      - name: Compile BEAM route and hot-upgrade primitives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ores_beam_canary
+          erlc -Werror -o /tmp/ores_beam_canary .ores-common-desktop-infra/canary/beam/*.erl
+
+  terraform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+      - name: Validate local appliance Terraform projection
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive .ores-common-desktop-infra/canary/terraform
+          terraform -chdir=.ores-common-desktop-infra/canary/terraform init -backend=false
+          terraform -chdir=.ores-common-desktop-infra/canary/terraform validate
+
   flutter-dart:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
