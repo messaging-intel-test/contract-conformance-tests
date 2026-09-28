@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: '1.82.0'
       - name: Test Rust shared infra/CLI/daemon/desktop-app contracts
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
         with:
           otp-version: '27'
           rebar3-version: '3.24.0'
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
       - name: Validate local appliance Terraform projection
         shell: bash
         run: |
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           channel: stable
           cache: true
@@ -86,15 +86,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
           java-version: '17'
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           channel: stable
           cache: true
-      - name: Build Android app consuming the shared plugin
+      - name: Build Android app consuming built-in-Kotlin plugin
         shell: bash
         run: |
           set -euo pipefail
@@ -102,17 +102,15 @@ jobs:
           rm -rf /tmp/ores_common_mobile_host_android
           flutter create --platforms=android --project-name ores_host_canary /tmp/ores_common_mobile_host_android
           cd /tmp/ores_common_mobile_host_android
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('android/app/build.gradle.kts')
-          text = path.read_text()
-          old = 'minSdk = flutter.minSdkVersion'
-          if old not in text:
-              raise SystemExit('generated Flutter app minSdk declaration changed')
-          path.write_text(text.replace(old, 'minSdk = 26'))
-          PY
+          perl -0pi -e 's/minSdk = flutter\.minSdkVersion/minSdk = 26/' android/app/build.gradle.kts
+          grep -F 'minSdk = 26' android/app/build.gradle.kts
           flutter pub add ores_common_mobile_host --path "$package"
-          flutter build apk --debug
+          flutter build apk --debug 2>&1 | tee /tmp/android-build.log
+          test -f build/app/outputs/flutter-apk/app-debug.apk
+          if grep -Fq 'plugins that apply Kotlin Gradle Plugin' /tmp/android-build.log; then
+            echo 'Plugin still applies the legacy Kotlin Gradle Plugin' >&2
+            exit 1
+          fi
 
   ios-consumer:
     runs-on: macos-15
@@ -121,17 +119,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           channel: stable
           cache: true
-      - name: Build iOS app consuming wake-and-drain plugin
+      - name: Build iOS app consuming SwiftPM wake-and-drain plugin
         shell: bash
         run: |
           set -euo pipefail
           package="$GITHUB_WORKSPACE/$FLUTTER_PACKAGE"
           rm -rf /tmp/ores_common_mobile_host_ios
+          flutter config --enable-swift-package-manager
           flutter create --platforms=ios --project-name ores_host_canary /tmp/ores_common_mobile_host_ios
           cd /tmp/ores_common_mobile_host_ios
+          /usr/libexec/PlistBuddy -c 'Add :BGTaskSchedulerPermittedIdentifiers array' ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c 'Add :BGTaskSchedulerPermittedIdentifiers:0 string com.oresoftware.common-mobile-host.refresh' ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes array' ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes:0 string fetch' ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes:1 string remote-notification' ios/Runner/Info.plist
           flutter pub add ores_common_mobile_host --path "$package"
-          flutter build ios --debug --no-codesign
+          flutter build ios --debug --no-codesign 2>&1 | tee /tmp/ios-build.log
+          if grep -Fq 'does not support Swift Package Manager for ios' /tmp/ios-build.log; then
+            echo 'Plugin was not admitted through Swift Package Manager' >&2
+            exit 1
+          fi
