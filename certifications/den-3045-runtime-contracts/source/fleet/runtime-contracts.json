@@ -1,0 +1,173 @@
+{
+  "schema": "ores.desktop-runtime-contracts/v1",
+  "contracts": [
+    {
+      "product_id": "iso-lattes",
+      "org": "iso-lattes",
+      "daemon_port": 8761,
+      "client_security": {
+        "local_bearer_only": true,
+        "literal_loopback_http": true,
+        "explicit_port": true,
+        "redirects_allowed": false,
+        "max_response_bytes": 4194304,
+        "token_file_regular_non_symlink": true,
+        "token_file_private_on_unix": true
+      },
+      "execution": {
+        "reuse_model": "tenant_generation_cell",
+        "reuse_key": ["tenant_id", "deployment_generation"],
+        "runtime_host_reuse_allowed": true,
+        "direct_worker_launch_from_client": false,
+        "delegates_to": null
+      }
+    },
+    {
+      "product_id": "pony-expres",
+      "org": "pony-expres",
+      "daemon_port": 8762,
+      "client_security": {
+        "local_bearer_only": true,
+        "literal_loopback_http": true,
+        "explicit_port": true,
+        "redirects_allowed": false,
+        "max_response_bytes": 4194304,
+        "token_file_regular_non_symlink": true,
+        "token_file_private_on_unix": true
+      },
+      "execution": {
+        "reuse_model": "fresh_process",
+        "reuse_key": [],
+        "runtime_host_reuse_allowed": false,
+        "direct_worker_launch_from_client": false,
+        "delegates_to": null
+      }
+    },
+    {
+      "product_id": "lunatic-lorry",
+      "org": "lunatic-lorry",
+      "daemon_port": 8763,
+      "client_security": {
+        "local_bearer_only": true,
+        "literal_loopback_http": true,
+        "explicit_port": true,
+        "redirects_allowed": false,
+        "max_response_bytes": 16777216,
+        "token_file_regular_non_symlink": true,
+        "token_file_private_on_unix": true
+      },
+      "execution": {
+        "reuse_model": "fresh_actor",
+        "reuse_key": [],
+        "runtime_host_reuse_allowed": true,
+        "direct_worker_launch_from_client": false,
+        "delegates_to": null
+      }
+    },
+    {
+      "product_id": "graal-show",
+      "org": "graal-show",
+      "daemon_port": 8764,
+      "client_security": {
+        "local_bearer_only": true,
+        "literal_loopback_http": true,
+        "explicit_port": true,
+        "redirects_allowed": false,
+        "max_response_bytes": 4194304,
+        "token_file_regular_non_symlink": true,
+        "token_file_private_on_unix": true
+      },
+      "execution": {
+        "reuse_model": "tenant_generation_cell",
+        "reuse_key": ["tenant_id", "deployment_generation"],
+        "runtime_host_reuse_allowed": true,
+        "direct_worker_launch_from_client": false,
+        "delegates_to": null
+      }
+    },
+    {
+      "product_id": "scintilla",
+      "org": "scintilla-run",
+      "daemon_port": 8765,
+      "client_security": {
+        "local_bearer_only": true,
+        "literal_loopback_http": true,
+        "explicit_port": true,
+        "redirects_allowed": false,
+        "max_response_bytes": 1048576,
+        "token_file_regular_non_symlink": true,
+        "token_file_private_on_unix": true
+      },
+      "execution": {
+        "reuse_model": "runtime_managed",
+        "reuse_key": [],
+        "runtime_host_reuse_allowed": true,
+        "direct_worker_launch_from_client": false,
+        "delegates_to": null
+      }
+    },
+    {
+      "product_id": "wasm-xprs",
+      "org": "wasm-xprs",
+      "daemon_port": 8766,
+      "client_security": {
+        "local_bearer_only": true,
+        "literal_loopback_http": true,
+        "explicit_port": true,
+        "redirects_allowed": false,
+        "max_response_bytes": 16777216,
+        "token_file_regular_non_symlink": true,
+        "token_file_private_on_unix": true
+      },
+      "execution": {
+        "reuse_model": "fresh_store",
+        "reuse_key": [],
+        "runtime_host_reuse_allowed": true,
+        "direct_worker_launch_from_client": false,
+        "delegates_to": null
+      }
+    },
+    {
+      "product_id": "indiebuild",
+      "org": "gha-indie-worker",
+      "daemon_port": 8770,
+      "client_security": {
+        "local_bearer_only": true,
+        "literal_loopback_http": true,
+        "explicit_port": true,
+        "redirects_allowed": false,
+        "max_response_bytes": 1048576,
+        "token_file_regular_non_symlink": true,
+        "token_file_private_on_unix": true
+      },
+      "execution": {
+        "reuse_model": "delegated",
+        "reuse_key": [],
+        "runtime_host_reuse_allowed": false,
+        "direct_worker_launch_from_client": false,
+        "delegates_to": "scintilla"
+      }
+    },
+    {
+      "product_id": "beamscale",
+      "org": "beamscale",
+      "daemon_port": 9587,
+      "client_security": {
+        "local_bearer_only": true,
+        "literal_loopback_http": true,
+        "explicit_port": true,
+        "redirects_allowed": false,
+        "max_response_bytes": 1048576,
+        "token_file_regular_non_symlink": true,
+        "token_file_private_on_unix": true
+      },
+      "execution": {
+        "reuse_model": "runtime_managed",
+        "reuse_key": [],
+        "runtime_host_reuse_allowed": true,
+        "direct_worker_launch_from_client": false,
+        "delegates_to": null
+      }
+    }
+  ]
+}
