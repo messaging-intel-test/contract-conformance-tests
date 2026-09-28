@@ -6,9 +6,22 @@
       "display_name": "Scintilla",
       "runtime_kind": "process",
       "repo_prefix": "scintilla",
-      "required_repo_families": ["desktop-daemon", "desktop-cli", "desktop-infra", "desktop-app.rs", "flutter"],
+      "required_repo_families": [
+        "desktop-daemon",
+        "desktop-cli",
+        "desktop-infra",
+        "desktop-app.rs",
+        "flutter"
+      ],
       "org": "scintilla-run",
-      "repositories": {"desktop_daemon":"scintilla-desktop-daemon","desktop_cli":null,"desktop_cli_alias":"scintilla-cli","desktop_infra":"scintilla-desktop-infra","desktop_app_rs":"scintilla-desktop-app.rs","flutter":"scintilla-flutter"},
+      "repositories": {
+        "desktop_daemon": "scintilla-desktop-daemon",
+        "desktop_cli": null,
+        "desktop_cli_alias": "scintilla-cli",
+        "desktop_infra": "scintilla-desktop-infra",
+        "desktop_app_rs": "scintilla-desktop-app.rs",
+        "flutter": "scintilla-flutter"
+      },
       "parity_status": "missing-desktop-cli-repo"
     },
     {
@@ -16,9 +29,22 @@
       "display_name": "BeamScale",
       "runtime_kind": "beam",
       "repo_prefix": "bmscl",
-      "required_repo_families": ["desktop-daemon", "desktop-cli", "desktop-infra", "desktop-app.rs", "flutter"],
+      "required_repo_families": [
+        "desktop-daemon",
+        "desktop-cli",
+        "desktop-infra",
+        "desktop-app.rs",
+        "flutter"
+      ],
       "org": "beamscale",
-      "repositories": {"desktop_daemon":"beamscale-desktop-daemon","desktop_cli":null,"desktop_cli_alias":"bmscl-cli","desktop_infra":"beamscale-desktop-infra","desktop_app_rs":"bmscl-desktop-app.rs","flutter":"bmscl-flutter"},
+      "repositories": {
+        "desktop_daemon": "beamscale-desktop-daemon",
+        "desktop_cli": null,
+        "desktop_cli_alias": "bmscl-cli",
+        "desktop_infra": "beamscale-desktop-infra",
+        "desktop_app_rs": "bmscl-desktop-app.rs",
+        "flutter": "bmscl-flutter"
+      },
       "parity_status": "missing-desktop-cli-repo"
     },
     {
@@ -26,9 +52,22 @@
       "display_name": "Lunatic Lorry",
       "runtime_kind": "lunatic",
       "repo_prefix": "ll",
-      "required_repo_families": ["desktop-daemon", "desktop-cli", "desktop-infra", "desktop-app.rs", "flutter"],
+      "required_repo_families": [
+        "desktop-daemon",
+        "desktop-cli",
+        "desktop-infra",
+        "desktop-app.rs",
+        "flutter"
+      ],
       "org": "lunatic-lorry",
-      "repositories": {"desktop_daemon":"ll-desktop-daemon","desktop_cli":"ll-desktop-cli","desktop_cli_alias":"ll-cli","desktop_infra":"ll-desktop-infra","desktop_app_rs":"ll-desktop-app.rs","flutter":"ll-flutter"},
+      "repositories": {
+        "desktop_daemon": "ll-desktop-daemon",
+        "desktop_cli": "ll-desktop-cli",
+        "desktop_cli_alias": "ll-cli",
+        "desktop_infra": "ll-desktop-infra",
+        "desktop_app_rs": "ll-desktop-app.rs",
+        "flutter": "ll-flutter"
+      },
       "parity_status": "complete"
     },
     {
@@ -36,9 +75,22 @@
       "display_name": "Iso Lattes",
       "runtime_kind": "v8_isolate",
       "repo_prefix": "isl",
-      "required_repo_families": ["desktop-daemon", "desktop-cli", "desktop-infra", "desktop-app.rs", "flutter"],
+      "required_repo_families": [
+        "desktop-daemon",
+        "desktop-cli",
+        "desktop-infra",
+        "desktop-app.rs",
+        "flutter"
+      ],
       "org": "iso-lattes",
-      "repositories": {"desktop_daemon":"isl-desktop-daemon","desktop_cli":"isl-desktop-cli","desktop_cli_alias":"isl-cli","desktop_infra":"isl-desktop-infra","desktop_app_rs":"isl-desktop-app.rs","flutter":"isl-flutter"},
+      "repositories": {
+        "desktop_daemon": "isl-desktop-daemon",
+        "desktop_cli": "isl-desktop-cli",
+        "desktop_cli_alias": "isl-cli",
+        "desktop_infra": "isl-desktop-infra",
+        "desktop_app_rs": "isl-desktop-app.rs",
+        "flutter": "isl-flutter"
+      },
       "parity_status": "complete"
     },
     {
@@ -46,9 +98,22 @@
       "display_name": "Wasm Xprs",
       "runtime_kind": "wasmtime",
       "repo_prefix": "wasmx",
-      "required_repo_families": ["desktop-daemon", "desktop-cli", "desktop-infra", "desktop-app.rs", "flutter"],
+      "required_repo_families": [
+        "desktop-daemon",
+        "desktop-cli",
+        "desktop-infra",
+        "desktop-app.rs",
+        "flutter"
+      ],
       "org": "wasm-xprs",
-      "repositories": {"desktop_daemon":"wasmx-desktop-daemon","desktop_cli":"wasmx-desktop-cli","desktop_cli_alias":"wasmx-cli","desktop_infra":"wasmx-desktop-infra","desktop_app_rs":"wasmx-desktop-app.rs","flutter":"wasmx-flutter"},
+      "repositories": {
+        "desktop_daemon": "wasmx-desktop-daemon",
+        "desktop_cli": "wasmx-desktop-cli",
+        "desktop_cli_alias": "wasmx-cli",
+        "desktop_infra": "wasmx-desktop-infra",
+        "desktop_app_rs": "wasmx-desktop-app.rs",
+        "flutter": "wasmx-flutter"
+      },
       "parity_status": "complete"
     },
     {
@@ -56,9 +121,22 @@
       "display_name": "Graal Show",
       "runtime_kind": "graal_jvm",
       "repo_prefix": "gs",
-      "required_repo_families": ["desktop-daemon", "desktop-cli", "desktop-infra", "desktop-app.rs", "flutter"],
+      "required_repo_families": [
+        "desktop-daemon",
+        "desktop-cli",
+        "desktop-infra",
+        "desktop-app.rs",
+        "flutter"
+      ],
       "org": "graal-show",
-      "repositories": {"desktop_daemon":"gs-desktop-daemon","desktop_cli":"gs-desktop-cli","desktop_cli_alias":"gs-cli","desktop_infra":"gs-desktop-infra","desktop_app_rs":"gs-desktop-app.rs","flutter":"gs-flutter"},
+      "repositories": {
+        "desktop_daemon": "gs-desktop-daemon",
+        "desktop_cli": "gs-desktop-cli",
+        "desktop_cli_alias": "gs-cli",
+        "desktop_infra": "gs-desktop-infra",
+        "desktop_app_rs": "gs-desktop-app.rs",
+        "flutter": "gs-flutter"
+      },
       "parity_status": "complete"
     },
     {
@@ -66,9 +144,22 @@
       "display_name": "Pony Expres",
       "runtime_kind": "pony",
       "repo_prefix": "poex",
-      "required_repo_families": ["desktop-daemon", "desktop-cli", "desktop-infra", "desktop-app.rs", "flutter"],
+      "required_repo_families": [
+        "desktop-daemon",
+        "desktop-cli",
+        "desktop-infra",
+        "desktop-app.rs",
+        "flutter"
+      ],
       "org": "pony-expres",
-      "repositories": {"desktop_daemon":"poex-desktop-daemon","desktop_cli":"poex-desktop-cli","desktop_cli_alias":"poex-cli","desktop_infra":"poex-desktop-infra","desktop_app_rs":"poex-desktop-app.rs","flutter":"poex-flutter"},
+      "repositories": {
+        "desktop_daemon": "poex-desktop-daemon",
+        "desktop_cli": "poex-desktop-cli",
+        "desktop_cli_alias": "poex-cli",
+        "desktop_infra": "poex-desktop-infra",
+        "desktop_app_rs": "poex-desktop-app.rs",
+        "flutter": "poex-flutter"
+      },
       "parity_status": "complete"
     },
     {
@@ -76,9 +167,21 @@
       "display_name": "IndieBuild",
       "runtime_kind": "delegated_scintilla",
       "repo_prefix": "giw",
-      "required_repo_families": ["desktop-daemon", "desktop-cli", "desktop-infra", "desktop-app.rs"],
+      "required_repo_families": [
+        "desktop-daemon",
+        "desktop-cli",
+        "desktop-infra",
+        "desktop-app.rs"
+      ],
       "org": "gha-indie-worker",
-      "repositories": {"desktop_daemon":"giw-desktop-daemon","desktop_cli":"giw-desktop-cli","desktop_cli_alias":null,"desktop_infra":"giw-desktop-infra","desktop_app_rs":"gha-indie-worker-desktop-app.rs","flutter":null},
+      "repositories": {
+        "desktop_daemon": "giw-desktop-daemon",
+        "desktop_cli": "giw-desktop-cli",
+        "desktop_cli_alias": null,
+        "desktop_infra": "giw-desktop-infra",
+        "desktop_app_rs": "gha-indie-worker-desktop-app.rs",
+        "flutter": null
+      },
       "parity_status": "delegated-product"
     }
   ]
