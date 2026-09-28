@@ -1,9 +1,11 @@
 [package]
-name = "bmscl-desktop-app-cert"
+name = "bmscl-desktop-app"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
-publish = false
+license = "MIT"
+description = "Native BeamScale desktop runtime dashboard"
+repository = "https://github.com/beamscale/bmscl-desktop-app.rs"
 
 [lints.rust]
 unsafe_code = "deny"
