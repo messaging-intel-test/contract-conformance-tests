@@ -118,9 +118,13 @@ public final class OresCommonMobileHostPlugin: NSObject, FlutterPlugin {
 
     private func resolveCapabilities(result: @escaping FlutterResult) {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let notificationsEnabled = settings.authorizationStatus == .authorized ||
-                settings.authorizationStatus == .provisional ||
-                settings.authorizationStatus == .ephemeral
+            var notificationsEnabled = settings.authorizationStatus == .authorized ||
+                settings.authorizationStatus == .provisional
+
+            if #available(iOS 14.0, *) {
+                notificationsEnabled = notificationsEnabled ||
+                    settings.authorizationStatus == .ephemeral
+            }
 
             DispatchQueue.main.async {
                 result([
