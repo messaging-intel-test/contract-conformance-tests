@@ -47,6 +47,12 @@ pub enum DeploySource {
     },
 }
 
+impl DeploySource {
+    pub fn is_remote(&self) -> bool {
+        return matches!(self, Self::GitRepository { .. } | Self::GitHubOrganization { .. });
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RouteDiscoveryMode {
@@ -81,6 +87,7 @@ impl DeployRequest {
         };
     }
 
+    /// Docs-disabled deployment is intentionally limited to local development.
     pub fn without_docs(source: DeploySource) -> Self {
         return Self {
             source,
@@ -150,6 +157,10 @@ impl DeployRequest {
                 validate_api_docs_revision(api_docs_revision)?;
             }
             DocsGenerationMode::Disabled => {
+                if self.source.is_remote() {
+                    return Err(DeployRequestError::DocsRequiredForRemoteSource);
+                }
+
                 if self.api_docs_revision.is_some() {
                     return Err(DeployRequestError::UnexpectedApiDocsRevision);
                 }
@@ -215,6 +226,8 @@ pub enum DeployRequestError {
     MissingApiDocsRevision,
     #[error("api-docs generation must pin a full immutable git commit SHA: {0}")]
     MutableApiDocsRevision(String),
+    #[error("remote deployment sources require deterministic consumer-owned api-docs")]
+    DocsRequiredForRemoteSource,
     #[error("api_docs_revision must be absent when docs generation is disabled")]
     UnexpectedApiDocsRevision,
 }
@@ -460,6 +473,20 @@ mod tests {
         assert_eq!(
             deploy.validate(),
             Err(DeployRequestError::EmptyOrganizationPlan)
+        );
+    }
+
+    #[test]
+    fn remote_deploy_cannot_disable_deterministic_docs() {
+        let deploy = DeployRequest::without_docs(DeploySource::GitRepository {
+            repository: "https://github.com/example/app".to_string(),
+            revision: COMMIT_SHA.to_string(),
+            subdir: None,
+        });
+
+        assert_eq!(
+            deploy.validate(),
+            Err(DeployRequestError::DocsRequiredForRemoteSource)
         );
     }
 
