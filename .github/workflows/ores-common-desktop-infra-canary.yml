@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FLUTTER_PACKAGE: .ores-common-desktop-infra/canary/flutter
+
 jobs:
   rust:
     runs-on: ubuntu-24.04
@@ -23,3 +26,69 @@ jobs:
           toolchain: '1.82.0'
       - name: Test Rust shared infra/CLI/daemon/desktop-app contracts
         run: cargo test --manifest-path .ores-common-desktop-infra/canary/rust/Cargo.toml --workspace --all-targets
+
+  flutter-dart:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Analyze and test shared Flutter host package
+        working-directory: ${{ env.FLUTTER_PACKAGE }}
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+  android-consumer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build Android app consuming the shared plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$GITHUB_WORKSPACE/$FLUTTER_PACKAGE"
+          rm -rf /tmp/ores_common_mobile_host_android
+          flutter create --platforms=android --project-name ores_host_canary /tmp/ores_common_mobile_host_android
+          cd /tmp/ores_common_mobile_host_android
+          flutter pub add ores_common_mobile_host --path "$package"
+          flutter build apk --debug
+
+  ios-consumer:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build iOS app consuming wake-and-drain plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$GITHUB_WORKSPACE/$FLUTTER_PACKAGE"
+          rm -rf /tmp/ores_common_mobile_host_ios
+          flutter create --platforms=ios --project-name ores_host_canary /tmp/ores_common_mobile_host_ios
+          cd /tmp/ores_common_mobile_host_ios
+          flutter pub add ores_common_mobile_host --path "$package"
+          flutter build ios --debug --no-codesign
