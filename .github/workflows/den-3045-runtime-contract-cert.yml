@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           root="certifications/den-3045-runtime-contracts/source"
-          test "$(git hash-object "$root/conformance/rust/src/bin/validate_runtime_contracts.rs")" = "e1e71e621aae249921c816400cecc17440f81ed2"
+          test "$(git hash-object "$root/conformance/rust/src/bin/validate_runtime_contracts.rs")" = "4be27df74fee6a39ea962211594cbd2426d73553"
           test "$(git hash-object "$root/fleet/runtime-contracts.json")" = "b108e13e871e6e12d79ca7591b0cc2e74002d269"
           test "$(git hash-object "$root/fleet/products.json")" = "fc2bb765c40d3e837abc5fd1ba2a3aed3419d582"
 
