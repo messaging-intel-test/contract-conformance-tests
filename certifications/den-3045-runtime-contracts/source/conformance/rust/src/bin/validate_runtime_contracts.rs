@@ -23,8 +23,8 @@ fn main() {
 fn run() -> Result<(), String> {
     let contract_path = env::var("ORES_DESKTOP_RUNTIME_CONTRACTS_PATH")
         .unwrap_or_else(|_| "fleet/runtime-contracts.json".to_owned());
-    let products_path = env::var("ORES_DESKTOP_PRODUCTS_PATH")
-        .unwrap_or_else(|_| "fleet/products.json".to_owned());
+    let products_path =
+        env::var("ORES_DESKTOP_PRODUCTS_PATH").unwrap_or_else(|_| "fleet/products.json".to_owned());
 
     let contracts = fs::read_to_string(&contract_path)
         .map_err(|error| format!("cannot read runtime contracts {contract_path:?}: {error}"))?;
@@ -36,13 +36,20 @@ fn run() -> Result<(), String> {
     return Ok(());
 }
 
-fn validate_runtime_contracts_json(contracts_input: &str, products_input: &str) -> Result<(), String> {
+fn validate_runtime_contracts_json(
+    contracts_input: &str,
+    products_input: &str,
+) -> Result<(), String> {
     let contracts: Value = serde_json::from_str(contracts_input)
         .map_err(|error| format!("runtime contracts are not valid JSON: {error}"))?;
     let products: Value = serde_json::from_str(products_input)
         .map_err(|error| format!("product inventory is not valid JSON: {error}"))?;
 
-    require_object_keys(&contracts, "runtime-contracts root", &["schema", "contracts"])?;
+    require_object_keys(
+        &contracts,
+        "runtime-contracts root",
+        &["schema", "contracts"],
+    )?;
     require_object_keys(&products, "products root", &["schema", "products"])?;
     require_string(&contracts, "/schema", SCHEMA)?;
     require_string(&products, "/schema", PRODUCTS_SCHEMA)?;
@@ -94,12 +101,14 @@ fn validate_runtime_contracts_json(contracts_input: &str, products_input: &str) 
         let product_id = required_text(entry, "product_id")?;
         let org = required_text(entry, "org")?;
         if !contract_ids.insert(product_id.to_owned()) {
-            return Err(format!("duplicate runtime contract product_id: {product_id}"));
+            return Err(format!(
+                "duplicate runtime contract product_id: {product_id}"
+            ));
         }
 
-        let inventory_org = inventory_orgs
-            .get(product_id)
-            .ok_or_else(|| format!("runtime contract {product_id} is not present in product inventory"))?;
+        let inventory_org = inventory_orgs.get(product_id).ok_or_else(|| {
+            format!("runtime contract {product_id} is not present in product inventory")
+        })?;
         if inventory_org != org {
             return Err(format!(
                 "{product_id}: runtime contract org {org:?} does not match inventory org {inventory_org:?}"
@@ -147,7 +156,9 @@ fn validate_runtime_contracts_json(contracts_input: &str, products_input: &str) 
             return Err(format!("{source}: product cannot delegate to itself"));
         }
         if !contract_ids.contains(&target) {
-            return Err(format!("{source}: delegation target {target} is not declared"));
+            return Err(format!(
+                "{source}: delegation target {target} is not declared"
+            ));
         }
     }
 
@@ -180,7 +191,9 @@ fn validate_client_security(product_id: &str, entry: &Value) -> Result<(), Strin
         "token_file_private_on_unix",
     ] {
         if security.get(field).and_then(Value::as_bool) != Some(true) {
-            return Err(format!("{product_id}: client_security.{field} must be true"));
+            return Err(format!(
+                "{product_id}: client_security.{field} must be true"
+            ));
         }
     }
 
@@ -279,7 +292,9 @@ fn validate_execution(
             let target = delegates_to
                 .and_then(Value::as_str)
                 .filter(|value| !value.trim().is_empty())
-                .ok_or_else(|| format!("{product_id}: delegated execution requires delegates_to"))?;
+                .ok_or_else(|| {
+                    format!("{product_id}: delegated execution requires delegates_to")
+                })?;
             delegations.push((product_id.to_owned(), target.to_owned()));
         }
         other => {
@@ -303,8 +318,7 @@ fn validate_execution(
     if product_id == "wasm-xprs" && reuse_model != "fresh_store" {
         return Err("wasm-xprs must preserve fresh Wasmtime Store semantics".to_owned());
     }
-    if matches!(product_id, "iso-lattes" | "graal-show")
-        && reuse_model != "tenant_generation_cell"
+    if matches!(product_id, "iso-lattes" | "graal-show") && reuse_model != "tenant_generation_cell"
     {
         return Err(format!(
             "{product_id} must pin reusable cells to tenant + deployment generation"
@@ -400,8 +414,8 @@ mod tests {
             "\"redirects_allowed\": true",
             1,
         );
-        let error = validate_runtime_contracts_json(&mutated, PRODUCTS)
-            .expect_err("redirects must fail");
+        let error =
+            validate_runtime_contracts_json(&mutated, PRODUCTS).expect_err("redirects must fail");
         assert!(error.contains("redirects_allowed"));
     }
 
@@ -461,13 +475,9 @@ mod tests {
 
     #[test]
     fn inventory_org_drift_fails_closed() {
-        let mutated = CONTRACTS.replacen(
-            "\"org\": \"iso-lattes\"",
-            "\"org\": \"wrong-org\"",
-            1,
-        );
-        let error = validate_runtime_contracts_json(&mutated, PRODUCTS)
-            .expect_err("org drift must fail");
+        let mutated = CONTRACTS.replacen("\"org\": \"iso-lattes\"", "\"org\": \"wrong-org\"", 1);
+        let error =
+            validate_runtime_contracts_json(&mutated, PRODUCTS).expect_err("org drift must fail");
         assert!(error.contains("does not match inventory org"));
     }
 }
