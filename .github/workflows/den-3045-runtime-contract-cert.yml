@@ -1,0 +1,51 @@
+name: DEN-3045 runtime contract exact certification
+
+on:
+  pull_request:
+    paths:
+      - "certifications/den-3045-runtime-contracts/**"
+      - ".github/workflows/den-3045-runtime-contract-cert.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact carrier revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Verify exact source Git blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="certifications/den-3045-runtime-contracts/source"
+          test "$(git hash-object "$root/conformance/rust/src/bin/validate_runtime_contracts.rs")" = "e1e71e621aae249921c816400cecc17440f81ed2"
+          test "$(git hash-object "$root/fleet/runtime-contracts.json")" = "b108e13e871e6e12d79ca7591b0cc2e74002d269"
+          test "$(git hash-object "$root/fleet/products.json")" = "fc2bb765c40d3e837abc5fd1ba2a3aed3419d582"
+
+      - name: Install Rust 1.90
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.90.0
+          components: rustfmt, clippy
+
+      - name: Format exact validator source
+        working-directory: certifications/den-3045-runtime-contracts/source/conformance/rust
+        run: cargo +1.90.0 fmt --all -- --check
+
+      - name: Clippy exact validator source
+        working-directory: certifications/den-3045-runtime-contracts/source/conformance/rust
+        run: cargo +1.90.0 clippy --all-targets -- -D warnings
+
+      - name: Test adversarial fleet admission
+        working-directory: certifications/den-3045-runtime-contracts/source/conformance/rust
+        run: cargo +1.90.0 test --all-targets
+
+      - name: Execute canonical fleet validation
+        working-directory: certifications/den-3045-runtime-contracts/source
+        run: cargo +1.90.0 run --manifest-path conformance/rust/Cargo.toml --bin validate_runtime_contracts
