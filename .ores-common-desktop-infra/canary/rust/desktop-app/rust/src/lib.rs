@@ -36,6 +36,7 @@ impl DesktopAppViewState {
     pub fn apply_desired_state(mut self, desired_state: &DesiredState) -> Self {
         self.generation = Some(desired_state.generation);
         self.routes = desired_state.routes.clone();
+
         return self;
     }
 }
@@ -56,20 +57,137 @@ pub enum DesktopAppError {
     Rejected(String),
 }
 
-pub fn send_lifecycle_command<A, T>(adapter: &A, transport: &T, request_id: impl Into<String>, command: LifecycleCommand) -> Result<ControlResponse, DesktopAppError>
-where A: ProductDesktopAppAdapter, T: ControlTransport {
-    let config = config_from_adapter(adapter).map_err(|error| DesktopAppError::Config(error.to_string()))?;
+pub fn send_lifecycle_command<A, T>(
+    adapter: &A,
+    transport: &T,
+    request_id: impl Into<String>,
+    command: LifecycleCommand,
+) -> Result<ControlResponse, DesktopAppError>
+where
+    A: ProductDesktopAppAdapter,
+    T: ControlTransport,
+{
+    let config = config_from_adapter(adapter)
+        .map_err(|error| DesktopAppError::Config(error.to_string()))?;
     let control_request = request(request_id, adapter.product_id(), command);
-    let response = transport.send(&config, &control_request).map_err(DesktopAppError::Transport)?;
-    if !response.accepted { return Err(DesktopAppError::Rejected(response.message.clone().unwrap_or_else(|| "daemon rejected request".to_string()))); }
+    let response = transport
+        .send(&config, &control_request)
+        .map_err(DesktopAppError::Transport)?;
+
+    if !response.accepted {
+        return Err(DesktopAppError::Rejected(
+            response
+                .message
+                .clone()
+                .unwrap_or_else(|| "daemon rejected request".to_string()),
+        ));
+    }
+
     return Ok(response);
 }
 
-pub fn send_deploy_command<A, T>(adapter: &A, transport: &T, request_id: impl Into<String>, deploy: DeployRequest) -> Result<ControlResponse, DesktopAppError>
-where A: ProductDesktopAppAdapter, T: ControlTransport {
-    let config = config_from_adapter(adapter).map_err(|error| DesktopAppError::Config(error.to_string()))?;
-    let control_request = deployment_request(request_id, adapter.product_id(), deploy).map_err(|error| DesktopAppError::InvalidDeploy(error.to_string()))?;
-    let response = transport.send(&config, &control_request).map_err(DesktopAppError::Transport)?;
-    if !response.accepted { return Err(DesktopAppError::Rejected(response.message.clone().unwrap_or_else(|| "daemon rejected deployment".to_string()))); }
+pub fn send_deploy_command<A, T>(
+    adapter: &A,
+    transport: &T,
+    request_id: impl Into<String>,
+    deploy: DeployRequest,
+) -> Result<ControlResponse, DesktopAppError>
+where
+    A: ProductDesktopAppAdapter,
+    T: ControlTransport,
+{
+    let config = config_from_adapter(adapter)
+        .map_err(|error| DesktopAppError::Config(error.to_string()))?;
+    let control_request = deployment_request(request_id, adapter.product_id(), deploy)
+        .map_err(|error| DesktopAppError::InvalidDeploy(error.to_string()))?;
+    let response = transport
+        .send(&config, &control_request)
+        .map_err(DesktopAppError::Transport)?;
+
+    if !response.accepted {
+        return Err(DesktopAppError::Rejected(
+            response
+                .message
+                .clone()
+                .unwrap_or_else(|| "daemon rejected deployment".to_string()),
+        ));
+    }
+
     return Ok(response);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ores_common_desktop_cli::{ControlRequest, DeploySource, ResolvedCliConfig};
+    use std::path::PathBuf;
+
+    struct TestApp;
+
+    impl ProductCliAdapter for TestApp {
+        fn product_id(&self) -> &str {
+            return "beamscale";
+        }
+
+        fn resolved_config(&self) -> Result<ResolvedCliConfig, String> {
+            return ResolvedCliConfig::loopback(
+                "beamscale",
+                8765,
+                PathBuf::from("/tmp/beamscale.token"),
+            )
+            .map_err(|error| error.to_string());
+        }
+    }
+
+    impl ProductDesktopAppAdapter for TestApp {
+        fn display_name(&self) -> &str {
+            return "BeamScale";
+        }
+    }
+
+    struct TestTransport;
+
+    impl ControlTransport for TestTransport {
+        fn send(
+            &self,
+            _config: &ResolvedCliConfig,
+            request: &ControlRequest,
+        ) -> Result<ControlResponse, String> {
+            return Ok(ControlResponse {
+                request_id: request.request_id.clone(),
+                accepted: true,
+                generation: Some(4),
+                message: None,
+            });
+        }
+    }
+
+    #[test]
+    fn product_desktop_app_delegates_to_shared_control_protocol() {
+        let response = send_lifecycle_command(
+            &TestApp,
+            &TestTransport,
+            "request-1",
+            LifecycleCommand::Status,
+        )
+        .expect("status should be accepted");
+
+        assert_eq!(response.generation, Some(4));
+    }
+
+    #[test]
+    fn desktop_app_can_submit_local_folder_deployment() {
+        let deploy = DeployRequest::without_docs(DeploySource::LocalFolder {
+            path: PathBuf::from("/work/app"),
+        });
+        let response = send_deploy_command(
+            &TestApp,
+            &TestTransport,
+            "deploy-1",
+            deploy,
+        )
+        .expect("deployment should be accepted");
+
+        assert_eq!(response.generation, Some(4));
+    }
 }
