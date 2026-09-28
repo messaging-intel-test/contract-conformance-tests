@@ -1,0 +1,25 @@
+name: ORES common desktop infra canary
+
+on:
+  pull_request:
+    paths:
+      - '.ores-common-desktop-infra/canary/**'
+      - '.github/workflows/ores-common-desktop-infra-canary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.82.0'
+      - name: Test Rust shared infra/CLI/daemon/desktop-app contracts
+        run: cargo test --manifest-path .ores-common-desktop-infra/canary/rust/Cargo.toml --workspace --all-targets
