@@ -390,15 +390,17 @@ fn spawn_mutation<F>(
 }
 
 fn spawn_status_poll(weak: slint::Weak<MainWindow>, client: DaemonClient) {
-    thread::spawn(move || loop {
-        let result = client.status().map_err(|error| format!("{error:#}"));
-        if weak
-            .upgrade_in_event_loop(move |window| apply_status_result(&window, result))
-            .is_err()
-        {
-            break;
+    thread::spawn(move || {
+        loop {
+            let result = client.status().map_err(|error| format!("{error:#}"));
+            if weak
+                .upgrade_in_event_loop(move |window| apply_status_result(&window, result))
+                .is_err()
+            {
+                break;
+            }
+            thread::sleep(Duration::from_secs(2));
         }
-        thread::sleep(Duration::from_secs(2));
     });
 }
 
@@ -433,7 +435,11 @@ fn set_status_text(weak: &slint::Weak<MainWindow>, text: String) {
 fn status_summary(value: &Value) -> String {
     let runtime = running_label(value.pointer("/runtime/running").and_then(Value::as_bool));
     let tunnel = running_label(value.pointer("/tunnel/running").and_then(Value::as_bool));
-    let keep_awake = running_label(value.pointer("/keep_awake/running").and_then(Value::as_bool));
+    let keep_awake = running_label(
+        value
+            .pointer("/keep_awake/running")
+            .and_then(Value::as_bool),
+    );
     let version = value
         .get("daemon_version")
         .and_then(Value::as_str)
