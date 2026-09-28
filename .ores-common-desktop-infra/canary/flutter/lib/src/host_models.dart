@@ -31,6 +31,8 @@ class MobileHostCapabilities {
     required this.supportsWakeAndDrain,
     required this.supportsBackgroundPush,
     required this.minimumRepairWakeMinutes,
+    this.backgroundTaskRegistered = false,
+    this.notificationsEnabled = false,
   });
 
   final String platform;
@@ -38,14 +40,22 @@ class MobileHostCapabilities {
   final bool supportsWakeAndDrain;
   final bool supportsBackgroundPush;
   final int? minimumRepairWakeMinutes;
+  final bool backgroundTaskRegistered;
+  final bool notificationsEnabled;
 
   factory MobileHostCapabilities.fromMap(Map<Object?, Object?> map) {
     return MobileHostCapabilities(
       platform: map['platform'] as String? ?? 'unknown',
-      supportsPersistentOrigin: map['supports_persistent_origin'] as bool? ?? false,
+      supportsPersistentOrigin:
+          map['supports_persistent_origin'] as bool? ?? false,
       supportsWakeAndDrain: map['supports_wake_and_drain'] as bool? ?? false,
-      supportsBackgroundPush: map['supports_background_push'] as bool? ?? false,
-      minimumRepairWakeMinutes: map['minimum_repair_wake_minutes'] as int?,
+      supportsBackgroundPush:
+          map['supports_background_push'] as bool? ?? false,
+      minimumRepairWakeMinutes:
+          map['minimum_repair_wake_minutes'] as int?,
+      backgroundTaskRegistered:
+          map['background_task_registered'] as bool? ?? false,
+      notificationsEnabled: map['notifications_enabled'] as bool? ?? false,
     );
   }
 }
@@ -75,11 +85,29 @@ class MobileHostConfig {
     }
 
     if (originPort <= 0 || originPort > 65535) {
-      throw ArgumentError.value(originPort, 'originPort', 'must be a valid TCP port');
+      throw ArgumentError.value(
+        originPort,
+        'originPort',
+        'must be a valid TCP port',
+      );
     }
 
-    if (!relayUrl.hasScheme || relayUrl.host.isEmpty) {
-      throw ArgumentError.value(relayUrl, 'relayUrl', 'must be an absolute URI');
+    if (relayUrl.scheme.toLowerCase() != 'https' || relayUrl.host.isEmpty) {
+      throw ArgumentError.value(
+        relayUrl,
+        'relayUrl',
+        'must be an absolute HTTPS URI',
+      );
+    }
+
+    if (relayUrl.userInfo.isNotEmpty ||
+        relayUrl.hasQuery ||
+        relayUrl.hasFragment) {
+      throw ArgumentError.value(
+        relayUrl,
+        'relayUrl',
+        'must not contain credentials, query parameters, or fragments',
+      );
     }
   }
 }
