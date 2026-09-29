@@ -26,6 +26,26 @@ void main() {
     expect(config.validate, throwsArgumentError);
   });
 
+  test('relay transport must use credential-free https', () {
+    final insecure = MobileHostConfig(
+      productId: 'scintilla',
+      deviceId: 'device-1',
+      originPort: 18080,
+      mode: MobileHostingMode.persistentOrigin,
+      relayUrl: Uri.parse('http://relay.example.com/device'),
+    );
+    final embeddedCredentials = MobileHostConfig(
+      productId: 'scintilla',
+      deviceId: 'device-1',
+      originPort: 18080,
+      mode: MobileHostingMode.persistentOrigin,
+      relayUrl: Uri.parse('https://user:secret@relay.example.com/device'),
+    );
+
+    expect(insecure.validate, throwsArgumentError);
+    expect(embeddedCredentials.validate, throwsArgumentError);
+  });
+
   test('platform capabilities remain explicit', () {
     const capabilities = MobileHostCapabilities(
       platform: 'ios',
@@ -33,9 +53,13 @@ void main() {
       supportsWakeAndDrain: true,
       supportsBackgroundPush: true,
       minimumRepairWakeMinutes: null,
+      backgroundTaskRegistered: false,
+      notificationsEnabled: true,
     );
 
     expect(capabilities.supportsPersistentOrigin, isFalse);
     expect(capabilities.supportsWakeAndDrain, isTrue);
+    expect(capabilities.backgroundTaskRegistered, isFalse);
+    expect(capabilities.notificationsEnabled, isTrue);
   });
 }

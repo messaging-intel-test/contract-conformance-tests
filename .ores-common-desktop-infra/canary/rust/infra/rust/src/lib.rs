@@ -22,6 +22,10 @@ impl RouteTarget {
     pub fn is_loopback(&self) -> bool {
         return self.host.is_loopback();
     }
+
+    pub fn is_valid_local_target(&self) -> bool {
+        return self.is_loopback() && self.port != 0;
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,6 +34,8 @@ pub struct RouteSpec {
     pub host: String,
     pub path_prefix: String,
     pub target: RouteTarget,
+    /// Controls whether the stable edge may expose this route. It never grants
+    /// permission to proxy to a non-loopback backend.
     pub public: bool,
 }
 
@@ -65,12 +71,32 @@ pub enum RouteChange {
 pub enum ValidationError {
     #[error("product_id must not be empty")]
     EmptyProductId,
+    #[error("desired-state generation must be greater than zero")]
+    InvalidGeneration,
+    #[error("route_id must not be empty")]
+    EmptyRouteId,
+    #[error("route host must not be empty: {0}")]
+    EmptyRouteHost(String),
+    #[error("route path_prefix must start with '/': {0}")]
+    InvalidPathPrefix(String),
     #[error("duplicate route_id: {0}")]
     DuplicateRoute(String),
-    #[error("route target must be loopback unless public exposure is explicitly delegated: {0}")]
-    NonLoopbackTarget(String),
+    #[error("duplicate route binding for host/path_prefix: {0}")]
+    DuplicateRouteBinding(String),
+    #[error("route target must be a non-zero loopback socket: {0}")]
+    NonLocalRouteTarget(String),
+    #[error("service_id must not be empty")]
+    EmptyServiceId,
+    #[error("duplicate service_id: {0}")]
+    DuplicateService(String),
+    #[error("service command_id must not be empty: {0}")]
+    EmptyCommandId(String),
     #[error("service revision must be exact and non-empty: {0}")]
-    MissingRevision(String),
+    MutableRevision(String),
+    #[error("service digest must be sha256:<64 hex> or 64 hex: {0}")]
+    InvalidDigest(String),
+    #[error("service health endpoint must be a non-zero loopback socket: {0}")]
+    NonLocalHealthEndpoint(String),
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -95,26 +121,100 @@ pub trait DesktopInfraAdapter {
     }
 }
 
+pub fn is_sha256(value: &str) -> bool {
+    let digest = value.strip_prefix("sha256:").unwrap_or(value);
+
+    return digest.len() == 64 && digest.as_bytes().iter().all(u8::is_ascii_hexdigit);
+}
+
+pub fn is_obviously_mutable_revision(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+
+    if normalized.is_empty() {
+        return true;
+    }
+
+    if matches!(
+        normalized.as_str(),
+        "latest" | "main" | "master" | "head" | "trunk" | "dev" | "develop" | "development"
+    ) {
+        return true;
+    }
+
+    return normalized.starts_with("refs/heads/");
+}
+
 pub fn validate_desired_state(state: &DesiredState) -> Result<(), ValidationError> {
     if state.product_id.trim().is_empty() {
         return Err(ValidationError::EmptyProductId);
     }
 
+    if state.generation == 0 {
+        return Err(ValidationError::InvalidGeneration);
+    }
+
     let mut route_ids = BTreeSet::new();
+    let mut route_bindings = BTreeSet::new();
 
     for route in &state.routes {
+        if route.route_id.trim().is_empty() {
+            return Err(ValidationError::EmptyRouteId);
+        }
+
+        if route.host.trim().is_empty() {
+            return Err(ValidationError::EmptyRouteHost(route.route_id.clone()));
+        }
+
+        if !route.path_prefix.starts_with('/') {
+            return Err(ValidationError::InvalidPathPrefix(route.route_id.clone()));
+        }
+
         if !route_ids.insert(route.route_id.clone()) {
             return Err(ValidationError::DuplicateRoute(route.route_id.clone()));
         }
 
-        if !route.public && !route.target.is_loopback() {
-            return Err(ValidationError::NonLoopbackTarget(route.route_id.clone()));
+        let route_binding = (route.host.to_ascii_lowercase(), route.path_prefix.clone());
+
+        if !route_bindings.insert(route_binding) {
+            return Err(ValidationError::DuplicateRouteBinding(route.route_id.clone()));
+        }
+
+        if !route.target.is_valid_local_target() {
+            return Err(ValidationError::NonLocalRouteTarget(route.route_id.clone()));
         }
     }
 
+    let mut service_ids = BTreeSet::new();
+
     for service in &state.services {
-        if service.revision.trim().is_empty() || service.revision == "latest" {
-            return Err(ValidationError::MissingRevision(service.service_id.clone()));
+        if service.service_id.trim().is_empty() {
+            return Err(ValidationError::EmptyServiceId);
+        }
+
+        if !service_ids.insert(service.service_id.clone()) {
+            return Err(ValidationError::DuplicateService(service.service_id.clone()));
+        }
+
+        if service.command_id.trim().is_empty() {
+            return Err(ValidationError::EmptyCommandId(service.service_id.clone()));
+        }
+
+        if is_obviously_mutable_revision(&service.revision) {
+            return Err(ValidationError::MutableRevision(service.service_id.clone()));
+        }
+
+        if let Some(digest) = &service.digest {
+            if !is_sha256(digest) {
+                return Err(ValidationError::InvalidDigest(service.service_id.clone()));
+            }
+        }
+
+        if let Some(endpoint) = &service.health_endpoint {
+            if !endpoint.is_valid_local_target() {
+                return Err(ValidationError::NonLocalHealthEndpoint(
+                    service.service_id.clone(),
+                ));
+            }
         }
     }
 
@@ -184,7 +284,7 @@ mod tests {
         return RouteSpec {
             route_id: route_id.to_string(),
             host: "example.local".to_string(),
-            path_prefix: "/".to_string(),
+            path_prefix: format!("/{route_id}"),
             target: RouteTarget {
                 host: IpAddr::V4(Ipv4Addr::LOCALHOST),
                 port,
@@ -206,7 +306,33 @@ mod tests {
     }
 
     #[test]
-    fn mutable_latest_revision_is_rejected() {
+    fn public_route_still_requires_local_backend() {
+        let state = DesiredState {
+            product_id: "scintilla".to_string(),
+            generation: 1,
+            route_authority: RouteAuthority::Erlang,
+            routes: vec![RouteSpec {
+                route_id: "public-api".to_string(),
+                host: "example.local".to_string(),
+                path_prefix: "/api".to_string(),
+                target: RouteTarget {
+                    host: IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10)),
+                    port: 8080,
+                },
+                public: true,
+            }],
+            services: vec![],
+            labels: BTreeMap::new(),
+        };
+
+        assert!(matches!(
+            validate_desired_state(&state),
+            Err(ValidationError::NonLocalRouteTarget(route_id)) if route_id == "public-api"
+        ));
+    }
+
+    #[test]
+    fn mutable_revision_and_invalid_digest_are_rejected() {
         let state = DesiredState {
             product_id: "scintilla".to_string(),
             generation: 1,
@@ -214,8 +340,8 @@ mod tests {
             routes: vec![],
             services: vec![ServiceSpec {
                 service_id: "ingress".to_string(),
-                revision: "latest".to_string(),
-                digest: None,
+                revision: "refs/heads/main".to_string(),
+                digest: Some("not-a-sha256".to_string()),
                 command_id: "ingress".to_string(),
                 health_endpoint: None,
                 hot_reloadable: true,
@@ -225,7 +351,34 @@ mod tests {
 
         assert!(matches!(
             validate_desired_state(&state),
-            Err(ValidationError::MissingRevision(service_id)) if service_id == "ingress"
+            Err(ValidationError::MutableRevision(service_id)) if service_id == "ingress"
         ));
+    }
+
+    struct TestAdapter;
+
+    impl DesktopInfraAdapter for TestAdapter {
+        fn product_id(&self) -> &str {
+            return "wasmx";
+        }
+
+        fn desired_state(&self) -> DesiredState {
+            return DesiredState {
+                product_id: "wasmx".to_string(),
+                generation: 7,
+                route_authority: RouteAuthority::Erlang,
+                routes: vec![],
+                services: vec![],
+                labels: BTreeMap::new(),
+            };
+        }
+    }
+
+    #[test]
+    fn thin_adapter_can_delegate_immediately() {
+        let state = desired_state_from_adapter(&TestAdapter).expect("adapter state should validate");
+
+        assert_eq!(state.product_id, "wasmx");
+        assert_eq!(state.generation, 7);
     }
 }
